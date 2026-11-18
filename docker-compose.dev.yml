@@ -1,0 +1,8 @@
+# Local build override for development.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+services:
+  morph-play:
+    image: morph-play:dev
+    build:
+      context: .
+      dockerfile: Dockerfile

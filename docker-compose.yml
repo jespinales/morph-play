@@ -1,9 +1,7 @@
 services:
-  jellyfin-web:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: jellyfin-web
+  morph-play:
+    image: ghcr.io/jespinales/morph-play:latest
+    container_name: morph-play
     restart: unless-stopped
     ports:
       # Bound to 127.0.0.1 by default for setups behind Cloudflare Tunnel or a reverse proxy.

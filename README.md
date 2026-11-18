@@ -63,11 +63,13 @@ JELLYFIN_SERVER_URL=https://jellyfin.tudominio.com
 > Si dejas `JELLYFIN_SERVER_URL` vacío, la interfaz mostrará el asistente visual para introducir la dirección de tu servidor al abrir el navegador.
 > Si quieres usar un logotipo local sin depender de una URL externa, coloca tu imagen en `./brand/logo.svg`, descomenta el volumen `./brand:/usr/share/nginx/html/brand:ro` en `docker-compose.yml` y define `APP_LOGO_URL=/brand/logo.svg` en `.env`.
 
-### 2. Inicia el contenedor
+### 2. Inicia el contenedor (imagen precompilada desde GitHub Container Registry)
 
 ```bash
-docker compose up -d --build
+docker compose up -d
 ```
+
+> `docker-compose.yml` descarga directamente `ghcr.io/jespinales/morph-play:latest` (multi-arquitectura `amd64` y `arm64`) sin necesidad de compilar en tu servidor. Si actualizas la versión, ejecuta `docker compose pull && docker compose up -d`.
 
 - Con `BIND_ADDRESS=127.0.0.1`, accede localmente en `http://localhost:3000` y apunta tu túnel (`cloudflared`) o proxy inverso a `http://127.0.0.1:3000`.
 - El contenedor incluye `healthcheck` en `/healthz`, cabeceras de seguridad Nginx y `CDN-Cache-Control: no-store` para `/env-config.js`.
@@ -94,6 +96,9 @@ npm test
 
 # Compilar y verificar tipos para producción
 npm run build
+
+# Construir y levantar la imagen Docker localmente en lugar de usar GHCR
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 ```
 
 ---
