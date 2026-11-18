@@ -1,0 +1,94 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    background-color: #0a0a0e;
+    color: #ffffff;
+    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    overflow-x: hidden;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+}
+
+/* Ocultar barras de desplazamiento manteniendo la fluidez táctil y con rueda */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Barra de desplazamiento elegante para modales y escritorio */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0a0a0e;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Números grandes estilizados para el carrusel Top 10 */
+.top-rank-number {
+  font-weight: 900;
+  line-height: 0.8;
+  letter-spacing: -0.06em;
+  color: #0a0a0e;
+  -webkit-text-stroke: 2.5px rgba(255, 255, 255, 0.42);
+  text-shadow: 0 12px 30px rgba(0, 0, 0, 0.85);
+  user-select: none;
+}
+
+/* Máscara suave para carruseles horizontales en pantallas grandes */
+@media (min-width: 768px) {
+  .row-fade-edges {
+    mask-image: linear-gradient(
+      to right,
+      transparent 0%,
+      black 2.5%,
+      black 97.5%,
+      transparent 100%
+    );
+  }
+}
+
+/* Fundido vertical limpio del banner en móvil/tablet sin líneas de subpíxel en bordes */
+@media (max-width: 1023px) {
+  .hero-backdrop-mask {
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0%,
+      transparent 3%,
+      black 24%,
+      black 60%,
+      transparent 96%,
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0%,
+      transparent 3%,
+      black 24%,
+      black 60%,
+      transparent 96%,
+      transparent 100%
+    );
+  }
+}

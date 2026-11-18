@@ -1,0 +1,37 @@
+services:
+  jellyfin-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jellyfin-web
+    restart: unless-stopped
+    ports:
+      # Enlazado a 127.0.0.1 por defecto para quedar detrás de Cloudflare Tunnel o proxy HTTPS.
+      # Si necesitas exponerlo en LAN, define BIND_ADDRESS=0.0.0.0 en .env.
+      - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-3000}:80"
+    environment:
+      # Opcional: define la URL de tu servidor Jellyfin para saltar el asistente inicial.
+      # Si la dejas vacía, la interfaz mostrará el asistente visual en el navegador.
+      - JELLYFIN_SERVER_URL=${JELLYFIN_SERVER_URL:-}
+      # Opcional: personaliza globalmente el nombre y logotipo mostrado en la interfaz.
+      - APP_NAME=${APP_NAME:-}
+      - APP_LOGO_URL=${APP_LOGO_URL:-}
+    # Opcional: si deseas servir un logotipo local sin depender de URLs externas,
+    # coloca tu archivo en ./brand/logo.svg, descomenta volumes y usa APP_LOGO_URL=/brand/logo.svg
+    # volumes:
+    #   - ./brand:/usr/share/nginx/html/brand:ro
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    cpus: 0.5
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
