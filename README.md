@@ -10,7 +10,7 @@ Incluye identidad visual neutra de fábrica y permite personalizar libremente el
 
 - **Marca e identidad personalizable**:
   - Incluye el nombre neutro **MorphPlay** y un logotipo vectorial propio por defecto.
-  - Configurable globalmente mediante variables de entorno (`APP_NAME` y `APP_LOGO_URL`, incluyendo soporte para archivos locales montados en `/brand/`) o de forma individual en cada navegador desde **Perfil (`/perfil`)**.
+  - Configurable globalmente mediante variables de entorno (`APP_NAME` y `APP_LOGO_URL`, incluyendo soporte para archivos locales montados en `/brand/`) o de forma individual en cada navegador desde **Ajustes (`/settings`)**, junto con el selector de idioma **ES / EN**.
 
 - **Conexión híbrida y sencilla**:
   - Si defines `JELLYFIN_SERVER_URL` en `docker-compose.yml`, la aplicación se conecta automáticamente a tu servidor y muestra directo el selector de perfiles.
@@ -89,6 +89,9 @@ npm install
 # Iniciar servidor de desarrollo con recarga rápida
 npm run dev
 
+# Ejecutar tests unitarios (Vitest)
+npm test
+
 # Compilar y verificar tipos para producción
 npm run build
 ```
@@ -97,32 +100,29 @@ npm run build
 
 ## Arquitectura del proyecto
 
+Arquitectura modular por **features** y **capas unidireccionales** (`app/` → `features/` → `shared/`):
+
 ```text
 src/
-├── components/
-│   ├── BrandLogo.tsx           # Logotipo personalizable (SVG MorphPlay por defecto o imagen propia)
-│   ├── DetailModal.tsx         # Modal de detalles, temporadas, episodios, reparto y similares
-│   ├── HeroBanner.tsx          # Carrusel principal a pantalla completa
-│   ├── LanguageSwitcher.tsx    # Selector de idioma de la interfaz (ES / EN)
-│   ├── MediaCard.tsx           # Tarjetas 2:3 (póster) y 16:9 (Seguir viendo / Próximos)
-│   ├── MediaRow.tsx            # Carruseles horizontales con desplazamiento táctil
-│   ├── Navbar.tsx              # Barra superior fija y barra inferior adaptativa móvil
-│   └── VideoPlayerModal.tsx    # Reproductor HLS / Direct Play con MediaSegments
-├── context/
-│   └── AuthContext.tsx         # Estado de servidor, sesión de usuario, idioma, marca y preferencias
-├── i18n/
-│   └── translations.ts         # Diccionario tipado de interfaz en inglés (en) y español (es)
-├── pages/
-│   ├── CatalogPage.tsx         # Películas, Series, Colecciones, Mi lista y Búsqueda
-│   ├── HomePage.tsx            # Vista principal del catálogo
-│   ├── ProfileSelectPage.tsx   # Selector visual "¿Quién está viendo?"
-│   ├── ProfileSettingsPage.tsx # Personalización de marca, calidad, idiomas y perfil
-│   └── ServerConnectPage.tsx   # Asistente de conexión y acceso a Modo Demo
-├── services/
-│   ├── demoData.ts             # Catálogo de demostración sin servidor
-│   └── jellyfinApi.ts          # Cliente HTTP tipado basado en la API OpenAPI de Jellyfin
-└── types/
-    └── jellyfin.ts             # Definiciones TypeScript para esquemas de Jellyfin
+├── app/
+│   ├── App.tsx                       # Router y composición de modales globales
+│   ├── layout/
+│   │   └── Navbar.tsx                # Barra superior fija y barra inferior adaptativa móvil
+│   └── providers/
+│       ├── AuthProvider.tsx          # Estado de servidor, sesión de usuario y perfiles guardados
+│       └── PreferencesProvider.tsx   # Idioma (locale), marca (brand) y preferencias de reproducción
+├── features/
+│   ├── auth/                         # ServerConnectPage y ProfileSelectPage
+│   ├── catalog/                      # HomePage, CatalogPage, HeroBanner, MediaRow, MediaCard y hooks
+│   ├── media-detail/                 # DetailModal y useMediaDetail
+│   ├── player/                       # VideoPlayerModal, hooks (cola, subtítulos, atajos) y subcomponentes
+│   └── settings/                     # ProfileSettingsPage (idioma, calidad y personalización de marca)
+└── shared/
+    ├── api/                          # client.ts, jellyfin.ts, playback.ts y demo/
+    ├── components/                   # BrandLogo y LanguageSwitcher (componentes puros)
+    ├── i18n/                         # Diccionario tipado EN / ES y tests
+    ├── types/                        # Definiciones TypeScript para esquemas de Jellyfin
+    └── utils/                        # Utilidades puras (time, url, brand, trickplay, subtitles, storage) y tests
 ```
 
 ---
