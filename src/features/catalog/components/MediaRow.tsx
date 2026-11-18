@@ -75,7 +75,7 @@ export const MediaRow: React.FC<MediaRowProps> = ({
         {/* Horizontal scroll track */}
         <div
           ref={scrollRef}
-          className="flex items-stretch gap-3 sm:gap-4 overflow-x-auto touch-pan-x no-scrollbar scroll-smooth px-4 sm:px-6 lg:px-12 py-3"
+          className="flex items-stretch gap-3 sm:gap-4 overflow-x-auto touch-manipulation no-scrollbar px-4 sm:px-6 lg:px-12 py-3"
         >
           {items.map((item, idx) => (
             <MediaCard

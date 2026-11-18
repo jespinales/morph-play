@@ -75,6 +75,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
               src={imageUrl}
               alt={displayTitle}
               loading="lazy"
+              draggable={false}
               onError={() => setImgError(true)}
               className="w-full h-full object-cover transition-transform duration-500 [@media(hover:hover)]:group-hover:scale-105"
             />
@@ -166,6 +167,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
           src={imageUrl}
           alt={item.Name}
           loading="lazy"
+          draggable={false}
           onError={() => setImgError(true)}
           className="w-full h-full object-cover transition-transform duration-500 [@media(hover:hover)]:group-hover:scale-105"
         />
