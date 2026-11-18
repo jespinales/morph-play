@@ -197,8 +197,8 @@ export const MediaCard: React.FC<MediaCardProps> = ({
         )}
       </div>
 
-      {/* Hover action overlay on pointer devices (touch taps open Details directly) */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/45 to-transparent opacity-0 pointer-events-none [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-hover:pointer-events-auto group-focus-visible:opacity-100 group-focus-within:opacity-100 group-focus-within:pointer-events-auto transition-opacity duration-200 flex flex-col justify-end p-3">
+      {/* Action overlay: always visible & actionable on touch devices; revealed on hover for pointer devices */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 to-transparent [@media(hover:hover)]:via-black/45 opacity-100 pointer-events-auto [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:pointer-events-none [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-hover:pointer-events-auto group-focus-visible:opacity-100 group-focus-within:opacity-100 group-focus-within:pointer-events-auto transition-opacity duration-200 flex flex-col justify-end p-2.5 sm:p-3">
         <div className="flex items-center gap-1.5 mb-2">
           <button
             type="button"
@@ -207,9 +207,9 @@ export const MediaCard: React.FC<MediaCardProps> = ({
               onPlay(item);
             }}
             aria-label={t.card.playAria(item.Name)}
-            className="w-9 h-9 rounded-full bg-white text-black hover:bg-white/90 flex items-center justify-center shadow transition-transform active:scale-95"
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white text-black hover:bg-white/90 flex items-center justify-center shadow transition-transform active:scale-95"
           >
-            <Play className="w-4 h-4 fill-black ml-0.5" />
+            <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-black ml-0.5" />
           </button>
 
           {item.Type !== 'BoxSet' && (
@@ -221,7 +221,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
               }}
               aria-label={isFavorite ? t.card.removeFromList : t.card.addToList}
               title={isFavorite ? t.card.removeFromList : t.card.addToList}
-              className={`w-9 h-9 rounded-full border flex items-center justify-center transition-colors ${
+              className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full border flex items-center justify-center transition-colors ${
                 isFavorite
                   ? 'bg-[#00A4DC]/25 border-[#00A4DC] text-[#00A4DC]'
                   : 'bg-black/50 border-white/35 text-white hover:border-white'
@@ -238,7 +238,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
               onOpenDetail(item);
             }}
             aria-label={t.card.moreInfoAria(item.Name)}
-            className="ml-auto w-9 h-9 rounded-full bg-black/50 border border-white/35 text-white hover:border-white flex items-center justify-center transition-colors"
+            className="ml-auto w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-black/50 border border-white/35 text-white hover:border-white flex items-center justify-center transition-colors"
           >
             <Info className="w-4 h-4" />
           </button>
