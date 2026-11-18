@@ -10,6 +10,15 @@ export function secondsToTicks(seconds: number): number {
   return Math.round(seconds * TICKS_PER_SECOND);
 }
 
+/** Resolve valid resume offset in seconds, ignoring trivial starts or near-end timestamps. */
+export function resolveResumeStartSeconds(positionTicks?: number, durationTicks?: number): number {
+  const startSeconds = ticksToSeconds(positionTicks);
+  if (startSeconds <= 5) return 0;
+  const durationSeconds = ticksToSeconds(durationTicks);
+  if (durationSeconds > 0 && startSeconds >= durationSeconds - 10) return 0;
+  return startSeconds;
+}
+
 export function formatDurationFromTicks(ticks?: number): string {
   const totalMinutes = Math.round(ticksToSeconds(ticks) / 60);
   if (totalMinutes <= 0) return '';

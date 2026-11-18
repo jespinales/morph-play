@@ -115,6 +115,8 @@ export interface BuiltPlaybackStream {
   fallbackUrl?: string;
   isHls: boolean;
   playMethod: 'DirectPlay' | 'DirectStream' | 'Transcode';
+  startSeconds?: number;
+  durationSeconds?: number;
   subtitleTracks: Array<{
     index: number;
     label: string;

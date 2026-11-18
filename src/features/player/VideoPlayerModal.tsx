@@ -11,7 +11,7 @@ import {
   qualityToBitrate,
 } from '../../shared/api/playback';
 import { BaseItemDto, MediaSegmentDto, MediaSourceInfo, MediaStream } from '../../shared/types/jellyfin';
-import { secondsToTicks, ticksToSeconds } from '../../shared/utils/time';
+import { resolveResumeStartSeconds, secondsToTicks, ticksToSeconds } from '../../shared/utils/time';
 import { getTrickplayFrame, selectTrickplayInfo, TrickplaySelection } from '../../shared/utils/trickplay';
 import { NextEpisodeCard } from './components/NextEpisodeCard';
 import { PlayerControls } from './components/PlayerControls';
@@ -144,6 +144,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
 
     async function loadPlayback() {
       setLoadingStream(true);
+      setBuiltStream(null);
       setStreamError(null);
       setOpenMenu(null);
       setAutoSkippedId(null);
@@ -187,15 +188,28 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
             : subtitles.find((s) => s.Language?.toLowerCase() === preferences.preferredSubtitleLang) ??
               subtitles.find((s) => s.Index === source.DefaultSubtitleStreamIndex);
 
-        const stream = buildPlaybackStream(
-          serverUrl,
-          accessToken!,
-          activeItem.Id,
-          source,
-          playbackInfo.PlaySessionId,
-          preferredAudio?.Index,
-          preferences.quality
-        );
+        const resumeTicks =
+          itemDetail?.UserData?.PlaybackPositionTicks ??
+          activeItem.UserData?.PlaybackPositionTicks ??
+          0;
+        const runtimeTicks =
+          source.RunTimeTicks ?? itemDetail?.RunTimeTicks ?? activeItem.RunTimeTicks;
+        const startSeconds = resolveResumeStartSeconds(resumeTicks, runtimeTicks);
+        const totalDuration = ticksToSeconds(runtimeTicks);
+
+        const stream: BuiltPlaybackStream = {
+          ...buildPlaybackStream(
+            serverUrl,
+            accessToken!,
+            activeItem.Id,
+            source,
+            playbackInfo.PlaySessionId,
+            preferredAudio?.Index,
+            preferences.quality
+          ),
+          startSeconds,
+          durationSeconds: totalDuration,
+        };
 
         setMediaSource(source);
         setPlaySessionId(playbackInfo.PlaySessionId);
@@ -206,14 +220,14 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         setSimilarItems(related);
         setTrickplay(selectTrickplayInfo(itemDetail ?? activeItem, source.Id));
         setBuiltStream(stream);
-        setDuration(ticksToSeconds(source.RunTimeTicks ?? activeItem.RunTimeTicks));
+        setDuration(totalDuration);
         setLoadingStream(false);
 
         jellyfinApi.reportPlaybackStart(serverUrl, accessToken!, {
           ItemId: activeItem.Id,
           MediaSourceId: source.Id,
           PlaySessionId: playbackInfo.PlaySessionId,
-          PositionTicks: activeItem.UserData?.PlaybackPositionTicks ?? 0,
+          PositionTicks: resumeTicks,
           AudioStreamIndex: preferredAudio?.Index,
           SubtitleStreamIndex: preferredSub?.Index,
           PlayMethod: stream.playMethod,
@@ -246,18 +260,46 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
       hlsRef.current = null;
     }
 
-    const startSeconds = ticksToSeconds(activeItem.UserData?.PlaybackPositionTicks);
-    let appliedResume = false;
+    const startSeconds = builtStream.startSeconds ?? 0;
+    const knownDuration = builtStream.durationSeconds ?? 0;
+    let appliedResume = startSeconds <= 0;
+    let detachMetadataListener: (() => void) | null = null;
 
-    const applyStartOffset = () => {
+    const applyResumePosition = () => {
       if (appliedResume) return;
-      appliedResume = true;
-      if (startSeconds > 5 && Number.isFinite(video.duration) && startSeconds < video.duration - 10) {
-        video.currentTime = startSeconds;
+      const effectiveDuration =
+        Number.isFinite(video.duration) && video.duration > 0 ? video.duration : knownDuration;
+      if (effectiveDuration > 0 && startSeconds >= effectiveDuration - 5) {
+        appliedResume = true;
+        return;
       }
+      // Wait for HAVE_METADATA so setting currentTime persists across MSE/native initialization
+      if (video.readyState < 1) return;
+      if (Math.abs(video.currentTime - startSeconds) > 2) {
+        video.currentTime = startSeconds;
+        setCurrentTime(startSeconds);
+      }
+      appliedResume = true;
+    };
+
+    const tryAutoPlay = () => {
       video.play().catch(() => {
         // Browser may require explicit user interaction if playback wasn't triggered by a direct gesture
       });
+    };
+
+    const listenForMetadata = (autoPlayOnMetadata: boolean) => {
+      detachMetadataListener?.();
+      const onLoadedMetadata = () => {
+        applyResumePosition();
+        if (autoPlayOnMetadata) {
+          tryAutoPlay();
+        }
+      };
+      video.addEventListener('loadedmetadata', onLoadedMetadata, { once: true });
+      detachMetadataListener = () => {
+        video.removeEventListener('loadedmetadata', onLoadedMetadata);
+      };
     };
 
     if (builtStream.isHls && Hls.isSupported()) {
@@ -265,29 +307,36 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         enableWorker: true,
         lowLatencyMode: false,
         backBufferLength: 120,
+        ...(startSeconds > 0 ? { startPosition: startSeconds } : {}),
       });
       hlsRef.current = hls;
+      listenForMetadata(false);
       hls.loadSource(builtStream.streamUrl);
       hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, applyStartOffset);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        applyResumePosition();
+        tryAutoPlay();
+      });
       hls.on(Hls.Events.ERROR, (_event, data) => {
         if (data.fatal) {
           if (builtStream.fallbackUrl && video.src !== builtStream.fallbackUrl) {
             hls.destroy();
             hlsRef.current = null;
+            appliedResume = startSeconds <= 0;
+            listenForMetadata(true);
             video.src = builtStream.fallbackUrl;
-            video.addEventListener('loadedmetadata', applyStartOffset, { once: true });
           } else {
             setStreamError(tRef.current.player.hlsLoadError);
           }
         }
       });
     } else {
+      listenForMetadata(true);
       video.src = builtStream.streamUrl;
-      video.addEventListener('loadedmetadata', applyStartOffset, { once: true });
     }
 
     return () => {
+      detachMetadataListener?.();
       pendingSeekTargetRef.current = null;
       if (seekFeedbackTimerRef.current) {
         window.clearTimeout(seekFeedbackTimerRef.current);
@@ -348,7 +397,14 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     isClosingRef.current = true;
 
     const video = videoRef.current;
-    const finalTicks = video ? secondsToTicks(video.currentTime) : lastReportedTicksRef.current;
+    const fallbackStartSeconds = builtStream?.startSeconds ?? 0;
+    const preserveUnloadedResume =
+      video && video.readyState < 1 && video.currentTime === 0 && fallbackStartSeconds > 0;
+    const finalTicks = preserveUnloadedResume
+      ? secondsToTicks(fallbackStartSeconds)
+      : video
+        ? secondsToTicks(video.currentTime)
+        : lastReportedTicksRef.current;
 
     if (video) video.pause();
     if (hlsRef.current) {
@@ -380,7 +436,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     } else {
       onProgressUpdated?.();
     }
-  }, [serverUrl, accessToken, mediaSource, activeItem.Id, playSessionId, onProgressUpdated, onClose]);
+  }, [serverUrl, accessToken, mediaSource, activeItem.Id, playSessionId, builtStream?.startSeconds, onProgressUpdated, onClose]);
 
   const togglePlayPause = useCallback(() => {
     const video = videoRef.current;
@@ -519,22 +575,20 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     const savedTime = videoRef.current?.currentTime ?? 0;
     setSelectedAudioIndex(audioIdx);
     setOpenMenu(null);
-    const updatedStream = buildPlaybackStream(
-      serverUrl,
-      accessToken,
-      activeItem.Id,
-      mediaSource,
-      playSessionId,
-      audioIdx,
-      preferences.quality
-    );
+    const updatedStream: BuiltPlaybackStream = {
+      ...buildPlaybackStream(
+        serverUrl,
+        accessToken,
+        activeItem.Id,
+        mediaSource,
+        playSessionId,
+        audioIdx,
+        preferences.quality
+      ),
+      startSeconds: savedTime > 0 ? savedTime : 0,
+      durationSeconds: builtStream?.durationSeconds ?? duration,
+    };
     setBuiltStream(updatedStream);
-    // Restore timestamp after reloading audio source
-    window.setTimeout(() => {
-      if (videoRef.current && savedTime > 0) {
-        videoRef.current.currentTime = savedTime;
-      }
-    }, 350);
   };
 
   const handlePlayNextEpisode = useCallback(() => {

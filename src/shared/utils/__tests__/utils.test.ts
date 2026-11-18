@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { isSafeLogoUrl, normalizeServerUrl } from '../url';
-import { formatDurationFromTicks, formatPlayerTime, secondsToTicks, ticksToSeconds } from '../time';
+import {
+  formatDurationFromTicks,
+  formatPlayerTime,
+  resolveResumeStartSeconds,
+  secondsToTicks,
+  ticksToSeconds,
+} from '../time';
 import { parseCueLines } from '../subtitles';
 import { getTrickplayFrame, selectTrickplayInfo } from '../trickplay';
 
@@ -36,6 +42,13 @@ describe('time utils', () => {
     expect(formatPlayerTime(65)).toBe('1:05');
     expect(formatPlayerTime(3661)).toBe('1:01:01');
     expect(formatPlayerTime(-1)).toBe('0:00');
+  });
+  it('resolves resume offset ignoring trivial starts and near-end timestamps', () => {
+    expect(resolveResumeStartSeconds(undefined, secondsToTicks(1800))).toBe(0);
+    expect(resolveResumeStartSeconds(secondsToTicks(4), secondsToTicks(1800))).toBe(0);
+    expect(resolveResumeStartSeconds(secondsToTicks(900), secondsToTicks(1800))).toBe(900);
+    expect(resolveResumeStartSeconds(secondsToTicks(1795), secondsToTicks(1800))).toBe(0);
+    expect(resolveResumeStartSeconds(secondsToTicks(120), 0)).toBe(120);
   });
 });
 
