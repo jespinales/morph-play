@@ -10,7 +10,7 @@ Incluye identidad visual neutra de fábrica y permite personalizar libremente el
 
 - **Marca e identidad personalizable**:
   - Incluye el nombre neutro **MorphPlay** y un logotipo vectorial propio por defecto.
-  - Configurable globalmente mediante variables de entorno (`APP_NAME` y `APP_LOGO_URL`, incluyendo soporte para archivos locales montados en `/brand/`) o de forma individual en cada navegador desde **Ajustes (`/settings`)**, junto con el selector de idioma **ES / EN**.
+  - Configurable globalmente mediante variables de entorno (`APP_NAME` y `APP_LOGO_URL`, incluyendo soporte para archivos locales montados en `/brand/`) o en cada navegador desde **Ajustes (`/settings`)** (solo visible para usuarios administradores), junto con el selector de idioma **ES / EN**.
 
 - **Conexión híbrida y sencilla**:
   - Si defines `JELLYFIN_SERVER_URL` en `docker-compose.yml`, la aplicación se conecta automáticamente a tu servidor y muestra directo el selector de perfiles.

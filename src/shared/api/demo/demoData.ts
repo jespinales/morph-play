@@ -118,6 +118,7 @@ export const DEMO_USERS: UserDto[] = [
     HasPassword: false,
     HasConfiguredPassword: false,
     PrimaryImageTag: 'avatar-1',
+    Policy: { IsAdministrator: true },
     Configuration: {
       AudioLanguagePreference: 'spa',
       SubtitleLanguagePreference: 'spa',
@@ -131,6 +132,7 @@ export const DEMO_USERS: UserDto[] = [
     HasPassword: false,
     HasConfiguredPassword: false,
     PrimaryImageTag: 'avatar-2',
+    Policy: { IsAdministrator: false },
   },
   {
     Id: 'demo-user-3',
@@ -139,6 +141,7 @@ export const DEMO_USERS: UserDto[] = [
     HasPassword: true,
     HasConfiguredPassword: true,
     PrimaryImageTag: 'avatar-3',
+    Policy: { IsAdministrator: false },
   },
 ];
 

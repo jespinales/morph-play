@@ -31,6 +31,7 @@ export const ProfileSettingsPage: React.FC = () => {
   ];
 
   const avatar = user && serverUrl ? getUserAvatarUrl(serverUrl, user) : null;
+  const isAdmin = Boolean(user?.Policy?.IsAdministrator);
 
   return (
     <main className="min-h-screen pt-24 pb-24 md:pb-16 max-w-4xl mx-auto px-4 sm:px-6 space-y-8 animate-fadeIn">
@@ -208,79 +209,81 @@ export const ProfileSettingsPage: React.FC = () => {
         </div>
       </section>
 
-      {/* Custom branding (app name and logo) */}
-      <section className="rounded-2xl bg-[#12131a] border border-white/10 p-6 space-y-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <Palette className="w-5 h-5 text-[#AA5CC3]" />
-            <div>
-              <h2 className="text-lg font-bold text-white">{t.settings.brandTitle}</h2>
-              <p className="text-xs text-zinc-400">
-                {t.settings.brandDescPrefix}{' '}
-                <code className="text-zinc-300">APP_NAME</code> {t.settings.brandDescAnd}{' '}
-                <code className="text-zinc-300">APP_LOGO_URL</code> {t.settings.brandDescSuffix}
-              </p>
+      {/* Custom branding (administrator profiles only) */}
+      {isAdmin && (
+        <section className="rounded-2xl bg-[#12131a] border border-white/10 p-6 space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <Palette className="w-5 h-5 text-[#AA5CC3]" />
+              <div>
+                <h2 className="text-lg font-bold text-white">{t.settings.brandTitle}</h2>
+                <p className="text-xs text-zinc-400">
+                  {t.settings.brandDescPrefix}{' '}
+                  <code className="text-zinc-300">APP_NAME</code> {t.settings.brandDescAnd}{' '}
+                  <code className="text-zinc-300">APP_LOGO_URL</code> {t.settings.brandDescSuffix}
+                </p>
+              </div>
             </div>
-          </div>
 
-          {(brandOverride.appName !== undefined || brandOverride.logoUrl !== undefined) && (
-            <button
-              type="button"
-              onClick={resetBrand}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-semibold text-white transition-colors"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              {t.settings.restoreDefault}
-            </button>
-          )}
-        </div>
-
-        {/* Live preview */}
-        <div className="rounded-xl bg-[#0a0a0e] border border-white/10 px-4 py-3 flex items-center justify-between gap-4">
-          <span className="text-xs font-medium text-zinc-400">{t.settings.preview}</span>
-          <BrandLogo
-            appName={brand.appName}
-            logoUrl={brand.logoUrl}
-            iconSize={30}
-            textClassName="text-lg font-extrabold tracking-tight text-white"
-          />
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <label htmlFor="brand-app-name" className="text-sm font-semibold text-zinc-200">
-              {t.settings.appNameLabel}
-            </label>
-            <input
-              id="brand-app-name"
-              name="appName"
-              type="text"
-              value={brandOverride.appName ?? ''}
-              onChange={(e) => updateBrand({ appName: e.target.value })}
-              placeholder={brand.appName}
-              className="w-full bg-[#0a0a0e] border border-white/15 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#00A4DC]"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label htmlFor="brand-logo-url" className="text-sm font-semibold text-zinc-200">
-              {t.settings.logoUrlLabel}
-            </label>
-            <input
-              id="brand-logo-url"
-              name="logoUrl"
-              type="text"
-              value={brandOverride.logoUrl ?? ''}
-              onChange={(e) => updateBrand({ logoUrl: e.target.value })}
-              placeholder={t.settings.logoUrlPlaceholder}
-              className="w-full bg-[#0a0a0e] border border-white/15 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#00A4DC]"
-            />
-            {brandOverride.logoUrl && !isSafeLogoUrl(brandOverride.logoUrl) && (
-              <p className="text-xs text-amber-400">{t.settings.logoUrlInvalidHint}</p>
+            {(brandOverride.appName !== undefined || brandOverride.logoUrl !== undefined) && (
+              <button
+                type="button"
+                onClick={resetBrand}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-semibold text-white transition-colors"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                {t.settings.restoreDefault}
+              </button>
             )}
           </div>
-        </div>
-      </section>
+
+          {/* Live preview */}
+          <div className="rounded-xl bg-[#0a0a0e] border border-white/10 px-4 py-3 flex items-center justify-between gap-4">
+            <span className="text-xs font-medium text-zinc-400">{t.settings.preview}</span>
+            <BrandLogo
+              appName={brand.appName}
+              logoUrl={brand.logoUrl}
+              iconSize={30}
+              textClassName="text-lg font-extrabold tracking-tight text-white"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label htmlFor="brand-app-name" className="text-sm font-semibold text-zinc-200">
+                {t.settings.appNameLabel}
+              </label>
+              <input
+                id="brand-app-name"
+                name="appName"
+                type="text"
+                value={brandOverride.appName ?? ''}
+                onChange={(e) => updateBrand({ appName: e.target.value })}
+                placeholder={brand.appName}
+                className="w-full bg-[#0a0a0e] border border-white/15 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#00A4DC]"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label htmlFor="brand-logo-url" className="text-sm font-semibold text-zinc-200">
+                {t.settings.logoUrlLabel}
+              </label>
+              <input
+                id="brand-logo-url"
+                name="logoUrl"
+                type="text"
+                value={brandOverride.logoUrl ?? ''}
+                onChange={(e) => updateBrand({ logoUrl: e.target.value })}
+                placeholder={t.settings.logoUrlPlaceholder}
+                className="w-full bg-[#0a0a0e] border border-white/15 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#00A4DC]"
+              />
+              {brandOverride.logoUrl && !isSafeLogoUrl(brandOverride.logoUrl) && (
+                <p className="text-xs text-amber-400">{t.settings.logoUrlInvalidHint}</p>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
     </main>
   );
 };
