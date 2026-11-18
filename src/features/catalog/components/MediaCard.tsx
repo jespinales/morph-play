@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Check, Info, Play, Plus, Star, X } from 'lucide-react';
 import { useAuth } from '../../../app/providers/AuthProvider';
 import { usePreferences } from '../../../app/providers/PreferencesProvider';
@@ -33,6 +33,20 @@ export const MediaCard: React.FC<MediaCardProps> = ({
   const { serverUrl } = useAuth();
   const { t } = usePreferences();
   const [imgError, setImgError] = useState(false);
+  const [touchOverlayOpen, setTouchOverlayOpen] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const lastPointerTypeRef = useRef<string>('mouse');
+
+  useEffect(() => {
+    if (!touchOverlayOpen) return;
+    const handleOutsidePointerDown = (e: PointerEvent) => {
+      if (cardRef.current && !cardRef.current.contains(e.target as Node)) {
+        setTouchOverlayOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', handleOutsidePointerDown);
+    return () => document.removeEventListener('pointerdown', handleOutsidePointerDown);
+  }, [touchOverlayOpen]);
 
   const effectiveRemoveLabel = removeLabel ?? t.card.defaultRemove;
   const isContinue = variant === 'continue';
@@ -151,13 +165,25 @@ export const MediaCard: React.FC<MediaCardProps> = ({
 
   const cardInner = (
     <div
+      ref={cardRef}
       role="button"
       tabIndex={0}
-      onClick={() => onOpenDetail(item)}
+      onPointerDown={(e) => {
+        lastPointerTypeRef.current = e.pointerType;
+      }}
+      onClick={() => {
+        if (lastPointerTypeRef.current !== 'mouse') {
+          setTouchOverlayOpen((prev) => !prev);
+          return;
+        }
+        onOpenDetail(item);
+      }}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           onOpenDetail(item);
+        } else if (e.key === 'Escape' && touchOverlayOpen) {
+          setTouchOverlayOpen(false);
         }
       }}
       className="group relative aspect-[2/3] w-full rounded-lg overflow-hidden bg-[#12131a] ring-1 ring-white/10 hover:ring-white/35 transition-all duration-300 [@media(hover:hover)]:md:hover:scale-[1.06] [@media(hover:hover)]:md:hover:z-20 active:scale-[0.98] shadow-xl cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00A4DC]"
@@ -197,13 +223,20 @@ export const MediaCard: React.FC<MediaCardProps> = ({
         )}
       </div>
 
-      {/* Action overlay: always visible & actionable on touch devices; revealed on hover for pointer devices */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 to-transparent [@media(hover:hover)]:via-black/45 opacity-100 pointer-events-auto [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:pointer-events-none [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-hover:pointer-events-auto group-focus-visible:opacity-100 group-focus-within:opacity-100 group-focus-within:pointer-events-auto transition-opacity duration-200 flex flex-col justify-end p-2.5 sm:p-3">
+      {/* Action overlay: toggled on tap for touch devices; revealed on hover for pointer devices */}
+      <div
+        className={`absolute inset-0 bg-gradient-to-t from-black/95 via-black/45 to-transparent transition-opacity duration-200 flex flex-col justify-end p-2.5 sm:p-3 ${
+          touchOverlayOpen
+            ? 'opacity-100 pointer-events-auto'
+            : 'opacity-0 pointer-events-none [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-hover:pointer-events-auto [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:group-focus-within:pointer-events-auto'
+        }`}
+      >
         <div className="flex items-center gap-1.5 mb-2">
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
+              setTouchOverlayOpen(false);
               onPlay(item);
             }}
             aria-label={t.card.playAria(item.Name)}
@@ -235,6 +268,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
+              setTouchOverlayOpen(false);
               onOpenDetail(item);
             }}
             aria-label={t.card.moreInfoAria(item.Name)}
