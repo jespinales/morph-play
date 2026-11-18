@@ -40,7 +40,7 @@ import {
 } from '../services/jellyfinApi';
 
 /**
- * Limpia etiquetas ASS/VTT básicas de una pista de subtítulos y separa en líneas visibles.
+ * Strips basic ASS/VTT tags from a subtitle cue and splits into visible lines.
  */
 function parseCueLines(rawText: string): string[] {
   return rawText
@@ -64,7 +64,9 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   onClose,
   onProgressUpdated,
 }) => {
-  const { serverUrl, accessToken, user, preferences } = useAuth();
+  const { serverUrl, accessToken, user, preferences, t } = useAuth();
+  const tRef = useRef(t);
+  tRef.current = t;
 
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -123,7 +125,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     setRootItem(item);
   }, [item]);
 
-  // Resolver episodio inicial y cola completa de episodios (todas las temporadas)
+  // Resolve initial episode and full multi-season episode queue
   useEffect(() => {
     let active = true;
     async function resolvePlayableItem() {
@@ -134,8 +136,8 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           rootItem.Id === item.Id && episodeQueue?.length ? episodeQueue : [];
         setQueue(initialQueue);
 
-        // Si es un episodio suelto (p. ej. desde Seguir viendo / Próximos episodios) o cola de una sola temporada,
-        // cargar todos los episodios de la serie para habilitar salto continuo incluso entre temporadas.
+        // If launched from a single episode (e.g. Continue Watching / Next Up) or a single-season queue,
+        // load all episodes across the series so continuous playback works across seasons.
         if (rootItem.Type === 'Episode' && rootItem.SeriesId) {
           try {
             const allEps = await jellyfinApi.getEpisodes(
@@ -148,7 +150,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
               setQueue(allEps);
             }
           } catch {
-            // Mantener cola inicial si falla la carga en segundo plano
+            // Keep initial queue if background load fails
           }
         }
         return;
@@ -177,7 +179,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         setQueue(eps);
         setActiveItem(chosen);
       } catch {
-        if (active) setStreamError('No se pudo cargar el episodio de la serie.');
+        if (active) setStreamError(tRef.current.player.loadEpisodeError);
       }
     }
 
@@ -187,7 +189,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     };
   }, [rootItem, item.Id, episodeQueue, serverUrl, accessToken, user]);
 
-  // Calcular siguiente episodio en la cola
+  // Compute next episode in the series queue
   const nextEpisode = useMemo(() => {
     if (activeItem.Type !== 'Episode' || queue.length === 0) return null;
     const idx = queue.findIndex((ep) => ep.Id === activeItem.Id);
@@ -213,7 +215,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     }, 250);
   }, []);
 
-  // Mostrar controles temporalmente al mover mouse / tocar
+  // Temporarily reveal controls on pointer or touch activity
   const bumpControls = useCallback(() => {
     setShowControls(true);
     if (hideControlsTimer.current) {
@@ -226,7 +228,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     }, 3200);
   }, [openMenu]);
 
-  // Cargar PlaybackInfo + MediaSegments cuando cambia activeItem
+  // Load PlaybackInfo + MediaSegments whenever activeItem changes
   useEffect(() => {
     let active = true;
     if (!serverUrl || !accessToken || !user || activeItem.Type === 'Series') return;
@@ -258,7 +260,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         if (!active) return;
         const source = playbackInfo.MediaSources?.[0];
         if (!source) {
-          setStreamError('El servidor no devolvió fuentes de reproducción válidas.');
+          setStreamError(tRef.current.player.noPlaybackSources);
           setLoadingStream(false);
           return;
         }
@@ -310,7 +312,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
       } catch (err) {
         if (!active) return;
         setStreamError(
-          err instanceof Error ? err.message : 'Error al iniciar la reproducción multimedia.'
+          err instanceof Error ? err.message : tRef.current.player.playbackInitError
         );
         setLoadingStream(false);
       }
@@ -322,7 +324,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     };
   }, [activeItem, serverUrl, accessToken, user, preferences.quality, preferences.preferredAudioLang, preferences.preferredSubtitleLang]);
 
-  // Montar HLS o stream directo en el elemento <video>
+  // Attach HLS or direct stream to the <video> element
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !builtStream) return;
@@ -345,7 +347,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         video.currentTime = startSeconds;
       }
       video.play().catch(() => {
-        // El navegador puede requerir interacción explícita si no venía de clic directo
+        // Browser may require explicit user interaction if playback wasn't triggered by a direct gesture
       });
     };
 
@@ -367,7 +369,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
             video.src = builtStream.fallbackUrl;
             video.addEventListener('loadedmetadata', applyStartOffset, { once: true });
           } else {
-            setStreamError('No se pudo cargar el flujo de video HLS.');
+            setStreamError(tRef.current.player.hlsLoadError);
           }
         }
       });
@@ -393,7 +395,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     };
   }, [builtStream, activeItem.Id]);
 
-  // Leer subtítulos en modo oculto ('hidden') para renderizarlos con posición cinematográfica propia
+  // Read subtitle cues in hidden mode for custom cinema-style positioning
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !builtStream || selectedSubtitleIndex === -1) {
@@ -451,7 +453,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     };
   }, [selectedSubtitleIndex, builtStream]);
 
-  // Reportar progreso periódico cada 10s y al cerrar
+  // Report playback progress every 10s and on close
   useEffect(() => {
     if (!serverUrl || !accessToken || !mediaSource || !builtStream) return;
 
@@ -617,7 +619,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     };
   }, []);
 
-  // Ocultar barra de scroll del documento mientras el reproductor cubre la pantalla
+  // Lock document scroll while fullscreen player is open
   useEffect(() => {
     const html = document.documentElement;
     const prevOverflow = html.style.overflow;
@@ -627,7 +629,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     };
   }, []);
 
-  // Atajos de teclado del reproductor
+  // Player keyboard shortcuts
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -685,7 +687,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [openMenu, handleClosePlayer, togglePlayPause, seekBy, bumpControls, toggleFullscreen]);
 
-  // Segmento activo ("Saltar intro" / "Saltar créditos")
+  // Active MediaSegment ("Skip intro" / "Skip credits")
   const activeSegment = useMemo(() => {
     const currentTicks = secondsToTicks(currentTime);
     return segments.find(
@@ -696,7 +698,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     );
   }, [segments, currentTime]);
 
-  // Auto-saltar intro si el usuario lo activó en preferencias
+  // Auto-skip intro if enabled in user preferences
   useEffect(() => {
     if (
       preferences.autoSkipIntro &&
@@ -730,7 +732,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
       preferences.quality
     );
     setBuiltStream(updatedStream);
-    // Restaurar tiempo tras recargar fuente
+    // Restore timestamp after reloading audio source
     window.setTimeout(() => {
       if (videoRef.current && savedTime > 0) {
         videoRef.current.currentTime = savedTime;
@@ -821,7 +823,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     : activeItem.Name;
   const subtitleDisplay =
     activeItem.Type === 'Episode' && activeItem.ParentIndexNumber !== undefined
-      ? `T${activeItem.ParentIndexNumber}:E${activeItem.IndexNumber} · ${activeItem.Name}`
+      ? `${t.common.episodeCode(activeItem.ParentIndexNumber, activeItem.IndexNumber)} · ${activeItem.Name}`
       : activeItem.ProductionYear
         ? `${activeItem.ProductionYear}`
         : '';
@@ -853,7 +855,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         showControls ? 'cursor-default' : 'cursor-none'
       }`}
     >
-      {/* Elemento de video HTML5 */}
+      {/* HTML5 video element */}
       <video
         ref={videoRef}
         playsInline
@@ -952,7 +954,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           }
         }}
         className="w-full h-full object-contain"
-        // opacity < 1 evita promoción a plano hardware MPO defectuoso en Windows DWM al ocultar controles
+        // Keeping opacity < 1 avoids buggy Windows DWM MPO hardware overlay promotion when controls hide
         style={{ opacity: 0.995 }}
       >
         {builtStream?.subtitleTracks
@@ -968,7 +970,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           ))}
       </video>
 
-      {/* Subtítulos con posición cinematográfica (evita quedar pegados al borde inferior) */}
+      {/* Cinema-positioned subtitle overlay */}
       {subtitleLines.length > 0 && selectedSubtitleIndex !== -1 && (
         <div
           className={`pointer-events-none absolute inset-x-0 z-20 flex flex-col items-center gap-1 px-4 sm:px-10 transition-all duration-200 ${
@@ -988,7 +990,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         </div>
       )}
 
-      {/* Indicador instantáneo de retroceso / adelanto */}
+      {/* Instant seek feedback pill */}
       {seekFeedback && !streamError && (
         <div
           key={seekFeedback.key}
@@ -1003,22 +1005,22 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         </div>
       )}
 
-      {/* Indicador de carga / buffering */}
+      {/* Loading / buffering spinner */}
       {(loadingStream || isBuffering) && !streamError && (
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none gap-3">
           <Loader2 className="w-12 h-12 text-[#00A4DC] animate-spin" />
           {loadingStream && (
-            <p className="text-sm text-zinc-300 font-medium">Preparando reproducción…</p>
+            <p className="text-sm text-zinc-300 font-medium">{t.player.preparing}</p>
           )}
         </div>
       )}
 
-      {/* Pantalla de error si falla el stream */}
+      {/* Stream error screen */}
       {streamError && (
         <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center p-6 text-center gap-4 z-30">
           <AlertCircle className="w-12 h-12 text-rose-400" />
           <div className="max-w-md space-y-1">
-            <h3 className="text-lg font-bold text-white">No se pudo reproducir el video</h3>
+            <h3 className="text-lg font-bold text-white">{t.player.playbackFailed}</h3>
             <p className="text-sm text-zinc-400">{streamError}</p>
           </div>
           <button
@@ -1026,12 +1028,12 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
             onClick={handleClosePlayer}
             className="px-5 py-2.5 rounded-lg bg-white text-black font-semibold text-sm hover:bg-white/90"
           >
-            Volver al catálogo
+            {t.player.backToCatalog}
           </button>
         </div>
       )}
 
-      {/* Botón flotante: Saltar intro / créditos */}
+      {/* Floating button: Skip intro / credits */}
       {activeSegment && !streamError && (
         <button
           type="button"
@@ -1040,14 +1042,14 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         >
           <FastForward className="w-4 h-4 fill-black" />
           {activeSegment.Type === 'Outro'
-            ? 'Saltar créditos'
+            ? t.player.skipCredits
             : activeSegment.Type === 'Recap'
-              ? 'Saltar resumen'
-              : 'Saltar intro'}
+              ? t.player.skipRecap
+              : t.player.skipIntro}
         </button>
       )}
 
-      {/* Tarjeta flotante previa al final: Siguiente episodio */}
+      {/* Pre-end floating card: Next episode */}
       {showNextEpisodePrompt && nextEpisode && !streamError && (() => {
         const nextThumb =
           getItemImageUrl(serverUrl, nextEpisode, 'Primary', 480) ||
@@ -1066,7 +1068,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setDismissedPromptId(activeItem.Id)}
-                  aria-label="Ocultar aviso de siguiente episodio"
+                  aria-label={t.player.hideNextPromptAria}
                   className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/65 hover:bg-black/90 border border-white/15 flex items-center justify-center text-white/90 hover:text-white transition-colors"
                 >
                   <X className="w-4 h-4" />
@@ -1078,17 +1080,18 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-[#00A4DC]">
-                    Siguiente episodio
+                    {t.player.nextEpisode}
                   </p>
                   <p className="text-sm font-bold text-white mt-0.5 truncate">
-                    T{nextEpisode.ParentIndexNumber}:E{nextEpisode.IndexNumber} · {nextEpisode.Name}
+                    {t.common.episodeCode(nextEpisode.ParentIndexNumber, nextEpisode.IndexNumber)} ·{' '}
+                    {nextEpisode.Name}
                   </p>
                 </div>
                 {!nextThumb && (
                   <button
                     type="button"
                     onClick={() => setDismissedPromptId(activeItem.Id)}
-                    aria-label="Ocultar aviso de siguiente episodio"
+                    aria-label={t.player.hideNextPromptAria}
                     className="w-8 h-8 -mt-1 -mr-1 shrink-0 rounded-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
                   >
                     <X className="w-4 h-4" />
@@ -1102,14 +1105,14 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
                 className="mt-3 w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-white text-black font-bold text-xs hover:bg-white/90 active:scale-[0.98] transition-all"
               >
                 <SkipForward className="w-4 h-4 fill-black" />
-                Reproducir ahora
+                {t.player.playNow}
               </button>
             </div>
           </div>
         );
       })()}
 
-      {/* Pantalla final al terminar episodio o película (evita pantalla negra congelada) */}
+      {/* End-of-playback overlay when episode or movie finishes */}
       {hasEnded && !streamError && (
         <div className="absolute inset-0 z-[25] flex items-center justify-center p-4 sm:p-8 pb-24 sm:pb-28 overflow-y-auto bg-[#0a0a0e]/92">
           {(() => {
@@ -1139,10 +1142,11 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
                 )}
                 <div className="flex-1 min-w-0 space-y-2 text-center sm:text-left">
                   <p className="text-xs font-bold uppercase tracking-wider text-[#00A4DC]">
-                    Siguiente episodio en {nextCountdown} s
+                    {t.player.nextEpisodeCountdown(nextCountdown)}
                   </p>
                   <h3 className="text-lg sm:text-xl font-extrabold text-white truncate">
-                    T{nextEpisode.ParentIndexNumber}:E{nextEpisode.IndexNumber} · {nextEpisode.Name}
+                    {t.common.episodeCode(nextEpisode.ParentIndexNumber, nextEpisode.IndexNumber)} ·{' '}
+                    {nextEpisode.Name}
                   </h3>
                   {nextEpisode.Overview && (
                     <p className="text-xs sm:text-sm text-zinc-300 line-clamp-2 leading-relaxed">
@@ -1156,14 +1160,14 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
                       className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-white text-black font-bold text-sm hover:bg-white/90 active:scale-[0.98] transition-all"
                     >
                       <Play className="w-4 h-4 fill-black" />
-                      Reproducir ahora
+                      {t.player.playNow}
                     </button>
                     <button
                       type="button"
                       onClick={() => setNextCountdown(null)}
                       className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-semibold text-sm border border-white/15 transition-colors"
                     >
-                      Cancelar
+                      {t.common.cancel}
                     </button>
                   </div>
                 </div>
@@ -1174,9 +1178,9 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
                   <p className="text-xs font-bold uppercase tracking-wider text-[#00A4DC]">
                     {activeItem.Type === 'Episode'
                       ? nextEpisode
-                        ? 'Reproducción en pausa entre capítulos'
-                        : 'Fin de la serie'
-                      : 'Película finalizada'}
+                        ? t.player.pausedBetweenEpisodes
+                        : t.player.seriesFinished
+                      : t.player.movieFinished}
                   </p>
                   <h3 className="text-xl sm:text-2xl font-extrabold text-white">
                     {titleDisplay}
@@ -1194,7 +1198,10 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
                       className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-white text-black font-bold text-sm hover:bg-white/90 active:scale-[0.98] transition-all"
                     >
                       <SkipForward className="w-4 h-4 fill-black" />
-                      Siguiente: T{nextEpisode.ParentIndexNumber}:E{nextEpisode.IndexNumber}
+                      {t.player.nextShortLabel(
+                        nextEpisode.ParentIndexNumber,
+                        nextEpisode.IndexNumber
+                      )}
                     </button>
                   )}
                   <button
@@ -1203,7 +1210,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
                     className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-semibold text-sm border border-white/15 transition-colors"
                   >
                     <RotateCcw className="w-4 h-4" />
-                    Volver a ver
+                    {t.player.watchAgain}
                   </button>
                   <button
                     type="button"
@@ -1211,14 +1218,14 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
                     className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-semibold text-sm border border-white/15 transition-colors"
                   >
                     <ArrowLeft className="w-4 h-4" />
-                    Volver al catálogo
+                    {t.player.backToCatalog}
                   </button>
                 </div>
 
                 {similarItems.length > 0 && (
                   <div className="space-y-2.5 pt-2 border-t border-white/10">
                     <p className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-                      También te podría gustar
+                      {t.player.youMightAlsoLike}
                     </p>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                       {similarItems.slice(0, 4).map((sim) => {
@@ -1256,7 +1263,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         </div>
       )}
 
-      {/* Barra Superior */}
+      {/* Top bar */}
       <div
         className={`absolute top-0 inset-x-0 z-30 p-4 sm:p-6 bg-gradient-to-b from-black/85 via-black/40 to-transparent transition-opacity duration-300 flex items-center justify-between gap-4 ${
           showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
@@ -1266,7 +1273,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           <button
             type="button"
             onClick={handleClosePlayer}
-            aria-label="Volver"
+            aria-label={t.player.backAria}
             className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -1280,7 +1287,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         </div>
       </div>
 
-      {/* Controles centrales táctiles rápidos */}
+      {/* Center touch quick controls */}
       <div
         className={`absolute inset-x-0 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center gap-8 sm:gap-14 pointer-events-none transition-opacity duration-300 ${
           showControls && !loadingStream && !streamError && !hasEnded ? 'opacity-100' : 'opacity-0'
@@ -1289,7 +1296,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         <button
           type="button"
           onClick={() => seekBy(-10)}
-          aria-label="Retroceder 10 segundos"
+          aria-label={t.player.rewind10Aria}
           className="pointer-events-auto p-3.5 rounded-full bg-black/45 hover:bg-black/75 text-white/90 backdrop-blur-sm transition-transform active:scale-90 sm:hidden [@media(hover:none)]:inline-flex"
         >
           <RotateCcw className="w-7 h-7" />
@@ -1298,7 +1305,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         <button
           type="button"
           onClick={togglePlayPause}
-          aria-label={isPlaying ? 'Pausar' : 'Reproducir'}
+          aria-label={isPlaying ? t.player.pauseAria : t.player.playAria}
           className="pointer-events-auto w-16 h-16 rounded-full bg-black/55 hover:bg-black/80 text-white border border-white/20 backdrop-blur-md flex items-center justify-center transition-transform active:scale-90 md:hidden [@media(hover:none)]:flex"
         >
           {isPlaying ? (
@@ -1311,20 +1318,20 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         <button
           type="button"
           onClick={() => seekBy(10)}
-          aria-label="Adelantar 10 segundos"
+          aria-label={t.player.forward10Aria}
           className="pointer-events-auto p-3.5 rounded-full bg-black/45 hover:bg-black/75 text-white/90 backdrop-blur-sm transition-transform active:scale-90 sm:hidden [@media(hover:none)]:inline-flex"
         >
           <RotateCw className="w-7 h-7" />
         </button>
       </div>
 
-      {/* Barra Inferior de Controles */}
+      {/* Bottom control bar */}
       <div
         className={`absolute bottom-0 inset-x-0 z-20 px-4 sm:px-8 pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-6 pt-12 bg-gradient-to-t from-black/95 via-black/70 to-transparent transition-opacity duration-300 ${
           showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
       >
-        {/* Barra de progreso */}
+        {/* Seek bar */}
         <div className="mb-3 flex items-center gap-3">
           <span className="text-xs font-mono text-zinc-200 w-12 text-right shrink-0">
             {formatPlayerTime(currentTime)}
@@ -1342,7 +1349,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
             onPointerLeave={() => setSeekPreview(null)}
             className="relative flex-1 group/seek flex items-center h-9 [@media(hover:hover)]:sm:h-7 touch-none cursor-pointer"
           >
-            {/* Previsualización flotante (Trickplay + tiempo) */}
+            {/* Floating Trickplay + timestamp preview */}
             {seekPreview && duration > 0 && (
               <div
                 className="pointer-events-none absolute bottom-8 -translate-x-1/2 z-30 flex flex-col items-center gap-1.5"
@@ -1404,7 +1411,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
               max={duration || 100}
               step={0.5}
               value={currentTime}
-              aria-label="Posición de reproducción"
+              aria-label={t.player.seekPositionAria}
               onChange={(e) => {
                 const next = Number(e.target.value);
                 if (videoRef.current) videoRef.current.currentTime = next;
@@ -1424,13 +1431,13 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           </span>
         </div>
 
-        {/* Botones de control */}
+        {/* Playback control buttons */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 sm:gap-3">
             <button
               type="button"
               onClick={togglePlayPause}
-              aria-label={isPlaying ? 'Pausar' : 'Reproducir'}
+              aria-label={isPlaying ? t.player.pauseAria : t.player.playAria}
               className="p-2 rounded-lg text-white hover:bg-white/10 transition-colors"
             >
               {isPlaying ? (
@@ -1443,8 +1450,8 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
             <button
               type="button"
               onClick={() => seekBy(-10)}
-              title="Retroceder 10 s (J)"
-              aria-label="Retroceder 10 segundos"
+              title={t.player.rewind10Title}
+              aria-label={t.player.rewind10Aria}
               className="hidden sm:inline-flex p-2 rounded-lg text-zinc-200 hover:text-white hover:bg-white/10 transition-all active:scale-90"
             >
               <RotateCcw className="w-5 h-5" />
@@ -1453,14 +1460,14 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
             <button
               type="button"
               onClick={() => seekBy(10)}
-              title="Adelantar 10 s (L)"
-              aria-label="Adelantar 10 segundos"
+              title={t.player.forward10Title}
+              aria-label={t.player.forward10Aria}
               className="hidden sm:inline-flex p-2 rounded-lg text-zinc-200 hover:text-white hover:bg-white/10 transition-all active:scale-90"
             >
               <RotateCw className="w-5 h-5" />
             </button>
 
-            {/* Control de volumen */}
+            {/* Volume controls */}
             <div className="hidden sm:flex items-center gap-2 group/vol">
               <button
                 type="button"
@@ -1469,7 +1476,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
                   videoRef.current.muted = !videoRef.current.muted;
                   setIsMuted(videoRef.current.muted);
                 }}
-                aria-label={isMuted ? 'Activar sonido' : 'Silenciar'}
+                aria-label={isMuted ? t.player.unmuteAria : t.player.muteAria}
                 className="p-2 rounded-lg text-zinc-200 hover:text-white hover:bg-white/10 transition-colors"
               >
                 {isMuted || volume === 0 ? (
@@ -1486,7 +1493,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
                 max={1}
                 step={0.05}
                 value={isMuted ? 0 : volume}
-                aria-label="Volumen"
+                aria-label={t.player.volumeAria}
                 onChange={(e) => {
                   const v = Number(e.target.value);
                   if (videoRef.current) {
@@ -1501,29 +1508,29 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
             </div>
           </div>
 
-          {/* Controles derechos: Siguiente episodio, Audio, Subtítulos, Velocidad, Pantalla completa */}
+          {/* Right controls: Next episode, Audio, Subtitles, Speed, Fullscreen */}
           <div ref={menusContainerRef} className="relative flex items-center gap-1 sm:gap-2">
             {nextEpisode && (
               <button
                 type="button"
                 onClick={handlePlayNextEpisode}
-                title="Siguiente episodio"
-                aria-label="Siguiente episodio"
+                title={t.player.nextEpisodeTitle}
+                aria-label={t.player.nextEpisodeTitle}
                 className="inline-flex items-center justify-center gap-1.5 min-w-[40px] min-h-[38px] px-3 py-2 rounded-lg text-xs sm:text-sm font-medium text-zinc-200 hover:text-white hover:bg-white/10 transition-colors"
               >
                 <SkipForward className="w-4 h-4" />
-                <span className="hidden md:inline">Siguiente</span>
+                <span className="hidden md:inline">{t.player.nextShortBtn}</span>
               </button>
             )}
 
-            {/* Selector de Pista de Audio */}
+            {/* Audio track selector */}
             {audioStreams.length > 0 && (
               <div className="relative">
                 <button
                   type="button"
                   onClick={() => setOpenMenu((m) => (m === 'audio' ? null : 'audio'))}
-                  title="Pistas de audio"
-                  aria-label="Seleccionar audio"
+                  title={t.player.audioTracksTitle}
+                  aria-label={t.player.audioSelectAria}
                   className={`p-2.5 rounded-lg transition-colors ${
                     openMenu === 'audio'
                       ? 'bg-white/20 text-white'
@@ -1535,7 +1542,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
                 {openMenu === 'audio' && (
                   <div className="absolute right-0 bottom-12 w-60 max-w-[calc(100vw-2rem)] max-h-[52vh] overflow-y-auto overscroll-contain rounded-xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 p-2 shadow-2xl space-y-1">
                     <p className="px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-zinc-400">
-                      Audio
+                      {t.player.audioHeading}
                     </p>
                     {audioStreams.map((audio) => (
                       <button
@@ -1548,7 +1555,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
                             : 'text-zinc-200 hover:bg-white/10'
                         }`}
                       >
-                        {audio.DisplayTitle || audio.Title || audio.Language || `Pista ${audio.Index}`}
+                        {audio.DisplayTitle || audio.Title || audio.Language || t.player.trackFallback(audio.Index)}
                       </button>
                     ))}
                   </div>
@@ -1556,13 +1563,13 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
               </div>
             )}
 
-            {/* Selector de Subtítulos */}
+            {/* Subtitle selector */}
             <div className="relative">
               <button
                 type="button"
                 onClick={() => setOpenMenu((m) => (m === 'subtitles' ? null : 'subtitles'))}
-                title="Subtítulos"
-                aria-label="Seleccionar subtítulos"
+                title={t.player.subtitlesTitle}
+                aria-label={t.player.subtitlesSelectAria}
                 className={`p-2.5 rounded-lg transition-colors ${
                   selectedSubtitleIndex !== -1 || openMenu === 'subtitles'
                     ? 'bg-white/20 text-[#7dd3fc]'
@@ -1574,7 +1581,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
               {openMenu === 'subtitles' && (
                 <div className="absolute right-0 bottom-12 w-56 max-w-[calc(100vw-2rem)] max-h-[52vh] overflow-y-auto overscroll-contain rounded-xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 p-2 shadow-2xl space-y-1">
                   <p className="px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-zinc-400">
-                    Subtítulos
+                    {t.player.subtitlesHeading}
                   </p>
                   <button
                     type="button"
@@ -1588,7 +1595,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
                         : 'text-zinc-200 hover:bg-white/10'
                     }`}
                   >
-                    Desactivados
+                    {t.player.subtitlesOff}
                   </button>
                   {builtStream?.subtitleTracks.map((track) => (
                     <button
@@ -1609,19 +1616,19 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
                   ))}
                   {(!builtStream || builtStream.subtitleTracks.length === 0) && (
                     <p className="px-3 py-1.5 text-xs text-zinc-500">
-                      Sin subtítulos externos disponibles
+                      {t.player.noExternalSubtitles}
                     </p>
                   )}
                 </div>
               )}
             </div>
 
-            {/* Velocidad */}
+            {/* Playback speed */}
             <div className="relative">
               <button
                 type="button"
                 onClick={() => setOpenMenu((m) => (m === 'speed' ? null : 'speed'))}
-                aria-label="Velocidad de reproducción"
+                aria-label={t.player.playbackSpeedAria}
                 className="min-w-[40px] min-h-[38px] px-2.5 py-2 rounded-lg text-xs font-bold text-zinc-200 hover:text-white hover:bg-white/10 transition-colors inline-flex items-center justify-center"
               >
                 {playbackRate}x
@@ -1653,8 +1660,8 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
             <button
               type="button"
               onClick={toggleFullscreen}
-              title="Pantalla completa (F)"
-              aria-label="Alternar pantalla completa"
+              title={t.player.fullscreenTitle}
+              aria-label={t.player.fullscreenAria}
               className="p-2.5 rounded-lg text-zinc-200 hover:text-white hover:bg-white/10 transition-colors"
             >
               {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}

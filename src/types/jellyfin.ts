@@ -244,6 +244,6 @@ export const DEFAULT_USER_PREFERENCES: UserPreferences = {
   quality: 'auto',
   autoPlayNextEpisode: true,
   autoSkipIntro: false,
-  preferredAudioLang: 'spa',
-  preferredSubtitleLang: 'spa',
+  preferredAudioLang: 'eng',
+  preferredSubtitleLang: 'eng',
 };

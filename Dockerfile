@@ -1,4 +1,4 @@
-# Etapa 1: Compilación de la aplicación SPA
+# Stage 1: Build the SPA bundle
 FROM node:22-alpine AS builder
 
 WORKDIR /app
@@ -9,7 +9,7 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-# Etapa 2: Servidor web ligero con Nginx
+# Stage 2: Lightweight Nginx web server
 FROM nginx:1.27-alpine
 
 COPY nginx-security-headers.conf /etc/nginx/snippets/security-headers.conf

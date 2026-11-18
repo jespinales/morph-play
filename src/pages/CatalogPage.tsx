@@ -17,13 +17,6 @@ interface CatalogPageProps {
   mutatedItems: Record<string, BaseItemDto>;
 }
 
-const SORT_OPTIONS = [
-  { value: 'DateCreated', label: 'Recientes primero', order: 'Descending' as const },
-  { value: 'CommunityRating', label: 'Mejor valoradas', order: 'Descending' as const },
-  { value: 'ProductionYear', label: 'Año de estreno', order: 'Descending' as const },
-  { value: 'SortName', label: 'Alfabético (A–Z)', order: 'Ascending' as const },
-];
-
 export const CatalogPage: React.FC<CatalogPageProps> = ({
   mode,
   refreshSignal,
@@ -32,7 +25,7 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
   onToggleFavorite,
   mutatedItems,
 }) => {
-  const { serverUrl, accessToken, user } = useAuth();
+  const { serverUrl, accessToken, user, locale, t } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const urlQuery = searchParams.get('q') ?? '';
 
@@ -41,6 +34,16 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
   const [selectedGenre, setSelectedGenre] = useState('');
   const [items, setItems] = useState<BaseItemDto[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const sortOptions = useMemo(
+    () => [
+      { value: 'DateCreated', label: t.catalog.sortRecent, order: 'Descending' as const },
+      { value: 'CommunityRating', label: t.catalog.sortTopRated, order: 'Descending' as const },
+      { value: 'ProductionYear', label: t.catalog.sortReleaseYear, order: 'Descending' as const },
+      { value: 'SortName', label: t.catalog.sortAlpha, order: 'Ascending' as const },
+    ],
+    [t]
+  );
 
   useEffect(() => {
     setLocalSearch(urlQuery);
@@ -57,7 +60,7 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
         if (!serverUrl || !accessToken || !user) return;
         setLoading(true);
         try {
-          const sortCfg = SORT_OPTIONS.find((s) => s.value === sortBy) ?? SORT_OPTIONS[0];
+          const sortCfg = sortOptions.find((s) => s.value === sortBy) ?? sortOptions[0];
           const includeItemTypes =
             mode === 'movies'
               ? 'Movie'
@@ -90,7 +93,7 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
       active = false;
       window.clearTimeout(timer);
     };
-  }, [mode, sortBy, selectedGenre, localSearch, serverUrl, accessToken, user, refreshSignal]);
+  }, [mode, sortBy, selectedGenre, localSearch, serverUrl, accessToken, user, refreshSignal, sortOptions]);
 
   const hydratedItems = useMemo(() => {
     const merged = items.map((item) =>
@@ -105,26 +108,26 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
   const availableGenres = useMemo(() => {
     const set = new Set<string>();
     items.forEach((item) => item.Genres?.forEach((g) => set.add(g)));
-    return Array.from(set).sort((a, b) => a.localeCompare(b, 'es'));
-  }, [items]);
+    return Array.from(set).sort((a, b) => a.localeCompare(b, locale));
+  }, [items, locale]);
 
   const meta = {
-    movies: { title: 'Películas', icon: Film, empty: 'No se encontraron películas.' },
-    series: { title: 'Series', icon: Tv, empty: 'No se encontraron series.' },
+    movies: { title: t.catalog.movies, icon: Film, empty: t.catalog.emptyMovies },
+    series: { title: t.catalog.series, icon: Tv, empty: t.catalog.emptySeries },
     collections: {
-      title: 'Colecciones',
+      title: t.catalog.collections,
       icon: Layers,
-      empty: 'No hay colecciones configuradas en el servidor.',
+      empty: t.catalog.emptyCollections,
     },
     favorites: {
-      title: 'Mi lista',
+      title: t.catalog.favorites,
       icon: Bookmark,
-      empty: 'Aún no has agregado títulos a Mi lista.',
+      empty: t.catalog.emptyFavorites,
     },
     search: {
-      title: localSearch.trim() ? `Resultados para “${localSearch.trim()}”` : 'Explorar catálogo',
+      title: localSearch.trim() ? t.catalog.searchResultsFor(localSearch.trim()) : t.catalog.searchTitle,
       icon: Search,
-      empty: 'No hay coincidencias para tu búsqueda.',
+      empty: t.catalog.emptySearch,
     },
   }[mode];
 
@@ -132,7 +135,7 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
 
   return (
     <main className="min-h-screen pt-24 pb-24 md:pb-16 max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-12 space-y-6 animate-fadeIn">
-      {/* Cabecera y Filtros */}
+      {/* Header and filters */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#AA5CC3]/25 to-[#00A4DC]/25 border border-white/10 flex items-center justify-center text-[#00A4DC]">
@@ -143,12 +146,12 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
               {meta.title}
             </h1>
             <p className="text-xs sm:text-sm text-zinc-400">
-              {loading ? 'Cargando títulos…' : `${hydratedItems.length} títulos disponibles`}
+              {loading ? t.catalog.loadingTitles : t.catalog.availableTitles(hydratedItems.length)}
             </p>
           </div>
         </div>
 
-        {/* Controles de orden y género */}
+        {/* Sort and genre controls */}
         <div className="flex flex-wrap items-center gap-2.5">
           {mode === 'search' && (
             <div className="relative w-full sm:w-64 lg:hidden">
@@ -163,8 +166,8 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
                   setLocalSearch(val);
                   setSearchParams(val ? { q: val } : {}, { replace: true });
                 }}
-                placeholder="Buscar película, serie o género…"
-                aria-label="Buscar película, serie o género"
+                placeholder={t.catalog.searchInputPlaceholder}
+                aria-label={t.catalog.searchInputAria}
                 className="w-full pl-9 pr-3 py-2 min-h-[38px] rounded-xl bg-[#12131a] border border-white/15 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#00A4DC]"
               />
             </div>
@@ -178,11 +181,11 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
                 name="genre"
                 value={selectedGenre}
                 onChange={(e) => setSelectedGenre(e.target.value)}
-                aria-label="Filtrar por género"
+                aria-label={t.catalog.filterGenreAria}
                 className="bg-[#12131a] border border-white/10 rounded-xl pl-9 pr-3 py-2 min-h-[38px] text-xs sm:text-sm text-white focus:outline-none focus:border-[#00A4DC] cursor-pointer"
               >
                 <option value="" className="bg-[#12131a]">
-                  Todos los géneros
+                  {t.catalog.allGenres}
                 </option>
                 {availableGenres.map((genre) => (
                   <option key={genre} value={genre} className="bg-[#12131a]">
@@ -198,10 +201,10 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
             name="sortBy"
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
-            aria-label="Ordenar catálogo"
+            aria-label={t.catalog.sortCatalogAria}
             className="bg-[#12131a] border border-white/10 rounded-xl px-3 py-2 min-h-[38px] text-xs sm:text-sm text-white focus:outline-none focus:border-[#00A4DC] cursor-pointer"
           >
-            {SORT_OPTIONS.map((opt) => (
+            {sortOptions.map((opt) => (
               <option key={opt.value} value={opt.value} className="bg-[#12131a]">
                 {opt.label}
               </option>
@@ -210,7 +213,7 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
         </div>
       </div>
 
-      {/* Cuadrícula adaptable */}
+      {/* Responsive grid */}
       {loading ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3 sm:gap-4">
           {Array.from({ length: 14 }).map((_, i) => (
@@ -227,7 +230,7 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
               onClick={() => setSelectedGenre('')}
               className="mt-2 px-4 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-semibold text-white"
             >
-              Limpiar filtro de género
+              {t.catalog.clearGenreFilter}
             </button>
           )}
         </div>

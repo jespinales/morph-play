@@ -2,7 +2,7 @@
   "name": "morph-play",
   "private": true,
   "version": "1.0.0",
-  "description": "MorphPlay — Interfaz web moderna, rápida, personalizable y adaptable para servidores Jellyfin",
+  "description": "MorphPlay — Modern, fast, customizable web client for Jellyfin servers",
   "type": "module",
   "scripts": {
     "dev": "vite",

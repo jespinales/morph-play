@@ -15,19 +15,12 @@ import {
   X,
 } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
+import { LanguageSwitcher } from './LanguageSwitcher';
 import { useAuth } from '../context/AuthContext';
 import { getUserAvatarUrl } from '../services/jellyfinApi';
 
-const NAV_LINKS = [
-  { to: '/', label: 'Inicio', icon: Home },
-  { to: '/peliculas', label: 'Películas', icon: Film },
-  { to: '/series', label: 'Series', icon: Tv },
-  { to: '/colecciones', label: 'Colecciones', icon: Layers },
-  { to: '/mi-lista', label: 'Mi lista', icon: Bookmark },
-];
-
 export const Navbar: React.FC = () => {
-  const { user, serverUrl, serverInfo, isEnvServerLocked, isDemo, switchProfile, disconnectServer } =
+  const { user, serverUrl, serverInfo, isEnvServerLocked, isDemo, t, switchProfile, disconnectServer } =
     useAuth();
   const [scrolled, setScrolled] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -37,6 +30,14 @@ export const Navbar: React.FC = () => {
   const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
+
+  const navLinks = [
+    { to: '/', label: t.nav.home, icon: Home },
+    { to: '/peliculas', label: t.nav.movies, icon: Film },
+    { to: '/series', label: t.nav.series, icon: Tv },
+    { to: '/colecciones', label: t.nav.collections, icon: Layers },
+    { to: '/mi-lista', label: t.nav.myList, icon: Bookmark },
+  ];
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
@@ -91,7 +92,7 @@ export const Navbar: React.FC = () => {
   return (
     <>
       <header className="fixed top-0 inset-x-0 z-40 bg-gradient-to-b from-[#0a0a0e]/85 via-[#0a0a0e]/35 to-transparent">
-        {/* Capa sólida con blur separada para interpolar únicamente opacity sin destellos de borde ni saltos de gradiente */}
+        {/* Separate blurred layer so only opacity transitions cleanly without edge flicker */}
         <div
           aria-hidden="true"
           className={`pointer-events-none absolute inset-0 -z-10 bg-[#0a0a0e]/95 backdrop-blur-md border-b border-white/10 shadow-2xl transition-opacity duration-500 ease-out ${
@@ -99,7 +100,7 @@ export const Navbar: React.FC = () => {
           }`}
         />
         <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-12 h-16 md:h-[72px] flex items-center justify-between gap-3">
-          {/* Logo + Enlaces principales */}
+          {/* Brand logo + main navigation */}
           <div className="flex items-center gap-4 lg:gap-8 min-w-0">
             <Link
               to="/"
@@ -108,8 +109,8 @@ export const Navbar: React.FC = () => {
               <BrandLogo iconSize={30} textClassName="text-lg md:text-xl font-extrabold tracking-tight text-white" />
             </Link>
 
-            <nav aria-label="Navegación principal" className="hidden md:flex items-center gap-1 lg:gap-2">
-              {NAV_LINKS.map(({ to, label }) => (
+            <nav aria-label={t.nav.mainAria} className="hidden md:flex items-center gap-1 lg:gap-2">
+              {navLinks.map(({ to, label }) => (
                 <NavLink
                   key={to}
                   to={to}
@@ -128,15 +129,15 @@ export const Navbar: React.FC = () => {
             </nav>
           </div>
 
-          {/* Búsqueda y Menú de Perfil */}
+          {/* Search & profile menu */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             {isDemo && (
               <span className="hidden lg:inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wider bg-gradient-to-r from-[#AA5CC3]/25 to-[#00A4DC]/25 border border-[#00A4DC]/40 text-[#7dd3fc]">
-                Modo Demo
+                {t.common.demoMode}
               </span>
             )}
 
-            {/* Barra de búsqueda expandible (overlay ancho completo en < lg para evitar desborde en móvil/tablet) */}
+            {/* Expandable search bar (full-width overlay below lg to avoid overflow on mobile/tablet) */}
             <div className="relative flex items-center">
               {searchOpen ? (
                 <div className="fixed top-0 inset-x-0 z-50 h-16 md:h-[72px] bg-[#0a0a0e]/98 backdrop-blur-xl border-b border-white/10 px-4 sm:px-6 flex items-center lg:static lg:inset-auto lg:h-auto lg:bg-transparent lg:backdrop-blur-none lg:border-0 lg:p-0">
@@ -149,8 +150,8 @@ export const Navbar: React.FC = () => {
                       type="text"
                       value={searchQuery}
                       onChange={(e) => handleSearchChange(e.target.value)}
-                      placeholder="Títulos, géneros..."
-                      aria-label="Buscar en el catálogo"
+                      placeholder={t.nav.searchPlaceholder}
+                      aria-label={t.nav.searchAria}
                       className="bg-transparent text-sm text-white placeholder-zinc-400 focus:outline-none w-full min-w-0 py-1.5"
                     />
                     <button
@@ -160,7 +161,7 @@ export const Navbar: React.FC = () => {
                         setSearchOpen(false);
                         if (location.pathname === '/buscar') navigate('/');
                       }}
-                      aria-label="Cerrar búsqueda"
+                      aria-label={t.nav.closeSearchAria}
                       className="w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
                     >
                       <X className="w-4 h-4" />
@@ -174,8 +175,8 @@ export const Navbar: React.FC = () => {
                     setSearchOpen(true);
                     setTimeout(() => searchInputRef.current?.focus(), 40);
                   }}
-                  aria-label="Abrir búsqueda"
-                  title="Buscar (/)"
+                  aria-label={t.nav.openSearchAria}
+                  title={t.nav.searchTitle}
                   className="w-10 h-10 rounded-full flex items-center justify-center text-zinc-200 hover:text-white hover:bg-white/10 transition-colors"
                 >
                   <Search className="w-5 h-5" />
@@ -183,24 +184,24 @@ export const Navbar: React.FC = () => {
               )}
             </div>
 
-            {/* Perfil del usuario */}
+            {/* User profile dropdown */}
             <div className="relative" ref={menuRef}>
               <button
                 type="button"
                 onClick={() => setMenuOpen((prev) => !prev)}
                 className="flex items-center gap-2 p-1 pr-2 rounded-full hover:bg-white/10 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00A4DC]"
                 aria-expanded={menuOpen}
-                aria-label="Menú de usuario"
+                aria-label={t.nav.userMenuAria}
               >
                 {avatarUrl ? (
                   <img
                     src={avatarUrl}
-                    alt={user?.Name ?? 'Perfil'}
+                    alt={user?.Name ?? t.nav.profileFallback}
                     className="w-8 h-8 rounded-lg object-cover ring-1 ring-white/20"
                   />
                 ) : (
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#AA5CC3] to-[#00A4DC] flex items-center justify-center text-sm font-bold text-white">
-                    {user?.Name?.[0]?.toUpperCase() ?? 'J'}
+                    {user?.Name?.[0]?.toUpperCase() ?? 'M'}
                   </div>
                 )}
                 <ChevronDown
@@ -230,7 +231,7 @@ export const Navbar: React.FC = () => {
                       className="w-full px-4 py-2 text-left text-sm text-zinc-200 hover:bg-white/10 hover:text-white flex items-center gap-2.5 transition-colors"
                     >
                       <Settings className="w-4 h-4 text-zinc-400" />
-                      Preferencias de reproducción
+                      {t.nav.playbackPreferences}
                     </button>
 
                     <button
@@ -242,8 +243,13 @@ export const Navbar: React.FC = () => {
                       className="w-full px-4 py-2 text-left text-sm text-zinc-200 hover:bg-white/10 hover:text-white flex items-center gap-2.5 transition-colors"
                     >
                       <Users className="w-4 h-4 text-zinc-400" />
-                      Cambiar de perfil
+                      {t.nav.switchProfile}
                     </button>
+
+                    <div className="px-4 py-2 flex items-center justify-between border-t border-white/10 mt-1">
+                      <span className="text-xs text-zinc-400">ES / EN</span>
+                      <LanguageSwitcher compact />
+                    </div>
                   </div>
 
                   {!isEnvServerLocked && (
@@ -257,7 +263,7 @@ export const Navbar: React.FC = () => {
                         className="w-full px-4 py-2 text-left text-sm text-rose-400 hover:bg-rose-500/10 flex items-center gap-2.5 transition-colors"
                       >
                         <LogOut className="w-4 h-4" />
-                        Desconectar servidor
+                        {t.nav.disconnectServer}
                       </button>
                     </div>
                   )}
@@ -268,12 +274,12 @@ export const Navbar: React.FC = () => {
         </div>
       </header>
 
-      {/* Barra inferior adaptativa para móviles */}
+      {/* Adaptive bottom bar for mobile */}
       <nav
-        aria-label="Navegación móvil"
+        aria-label={t.nav.mobileAria}
         className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[#0a0a0e]/95 backdrop-blur-xl border-t border-white/10 px-2 pt-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))] flex items-center justify-around"
       >
-        {NAV_LINKS.map(({ to, label, icon: Icon }) => (
+        {navLinks.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}
             to={to}

@@ -6,7 +6,7 @@ SERVER_URL="${JELLYFIN_SERVER_URL:-}"
 APP_NAME_VAL="${APP_NAME:-}"
 APP_LOGO_URL_VAL="${APP_LOGO_URL:-}"
 
-# Escapar comillas y barras invertidas para generar JS válido
+# Escape quotes and backslashes to emit valid JS string literals
 escape_js() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }

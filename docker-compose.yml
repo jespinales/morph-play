@@ -6,18 +6,18 @@ services:
     container_name: jellyfin-web
     restart: unless-stopped
     ports:
-      # Enlazado a 127.0.0.1 por defecto para quedar detrás de Cloudflare Tunnel o proxy HTTPS.
-      # Si necesitas exponerlo en LAN, define BIND_ADDRESS=0.0.0.0 en .env.
+      # Bound to 127.0.0.1 by default for setups behind Cloudflare Tunnel or a reverse proxy.
+      # To expose directly on your LAN, set BIND_ADDRESS=0.0.0.0 in .env.
       - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-3000}:80"
     environment:
-      # Opcional: define la URL de tu servidor Jellyfin para saltar el asistente inicial.
-      # Si la dejas vacía, la interfaz mostrará el asistente visual en el navegador.
+      # Optional: set your Jellyfin server URL to skip the initial connection wizard.
+      # If left empty, the UI displays the server setup screen in the browser.
       - JELLYFIN_SERVER_URL=${JELLYFIN_SERVER_URL:-}
-      # Opcional: personaliza globalmente el nombre y logotipo mostrado en la interfaz.
+      # Optional: globally customize the application title and logo URL.
       - APP_NAME=${APP_NAME:-}
       - APP_LOGO_URL=${APP_LOGO_URL:-}
-    # Opcional: si deseas servir un logotipo local sin depender de URLs externas,
-    # coloca tu archivo en ./brand/logo.svg, descomenta volumes y usa APP_LOGO_URL=/brand/logo.svg
+    # Optional: to serve a local logo without external URLs, place your file at ./brand/logo.svg,
+    # uncomment volumes below, and set APP_LOGO_URL=/brand/logo.svg in .env.
     # volumes:
     #   - ./brand:/usr/share/nginx/html/brand:ro
     security_opt:

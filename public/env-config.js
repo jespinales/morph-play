@@ -1,4 +1,4 @@
-// Configuración en tiempo de ejecución (sobreescrita por docker-entrypoint.sh en producción)
+// Runtime configuration (overwritten by docker-entrypoint.sh in production)
 window.__ENV__ = window.__ENV__ || {
   JELLYFIN_SERVER_URL: '',
   APP_NAME: '',

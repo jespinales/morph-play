@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { BaseItemDto } from '../types/jellyfin';
+import { useAuth } from '../context/AuthContext';
 import { MediaCard, MediaCardVariant } from './MediaCard';
 
 interface MediaRowProps {
@@ -27,6 +28,7 @@ export const MediaRow: React.FC<MediaRowProps> = ({
   onToggleFavorite,
   onRemove,
 }) => {
+  const { t } = useAuth();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   if (!items.length) return null;
@@ -60,17 +62,17 @@ export const MediaRow: React.FC<MediaRowProps> = ({
       </div>
 
       <div className="relative max-w-[1920px] mx-auto">
-        {/* Botón Izquierdo */}
+        {/* Left scroll button */}
         <button
           type="button"
           onClick={() => scrollByAmount('left')}
-          aria-label={`Desplazar ${title} a la izquierda`}
+          aria-label={t.row.scrollLeftAria(title)}
           className="hidden [@media(hover:hover)]:md:flex absolute left-2 top-1/2 -translate-y-1/2 z-30 w-10 h-20 items-center justify-center rounded-xl bg-black/70 hover:bg-black/90 text-white opacity-0 group-hover/row:opacity-100 transition-opacity duration-200 backdrop-blur-sm border border-white/10"
         >
           <ChevronLeft className="w-6 h-6" />
         </button>
 
-        {/* Contenedor horizontal */}
+        {/* Horizontal scroll track */}
         <div
           ref={scrollRef}
           className="flex items-stretch gap-3 sm:gap-4 overflow-x-auto touch-pan-x no-scrollbar scroll-smooth px-4 sm:px-6 lg:px-12 py-3"
@@ -90,11 +92,11 @@ export const MediaRow: React.FC<MediaRowProps> = ({
           ))}
         </div>
 
-        {/* Botón Derecho */}
+        {/* Right scroll button */}
         <button
           type="button"
           onClick={() => scrollByAmount('right')}
-          aria-label={`Desplazar ${title} a la derecha`}
+          aria-label={t.row.scrollRightAria(title)}
           className="hidden [@media(hover:hover)]:md:flex absolute right-2 top-1/2 -translate-y-1/2 z-30 w-10 h-20 items-center justify-center rounded-xl bg-black/70 hover:bg-black/90 text-white opacity-0 group-hover/row:opacity-100 transition-opacity duration-200 backdrop-blur-sm border border-white/10"
         >
           <ChevronRight className="w-6 h-6" />

@@ -16,7 +16,7 @@
   }
 }
 
-/* Ocultar barras de desplazamiento manteniendo la fluidez táctil y con rueda */
+/* Hide scrollbars while keeping smooth touch and wheel scrolling */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -26,7 +26,7 @@
   scrollbar-width: none;
 }
 
-/* Barra de desplazamiento elegante para modales y escritorio */
+/* Custom subtle scrollbar for modals and desktop */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -45,7 +45,7 @@
   background: rgba(255, 255, 255, 0.3);
 }
 
-/* Números grandes estilizados para el carrusel Top 10 */
+/* Stylized rank numerals for Top 10 carousel */
 .top-rank-number {
   font-weight: 900;
   line-height: 0.8;
@@ -56,7 +56,7 @@
   user-select: none;
 }
 
-/* Máscara suave para carruseles horizontales en pantallas grandes */
+/* Soft horizontal edge fade mask for carousels on large viewports */
 @media (min-width: 768px) {
   .row-fade-edges {
     mask-image: linear-gradient(
@@ -69,7 +69,7 @@
   }
 }
 
-/* Fundido vertical limpio del banner en móvil/tablet sin líneas de subpíxel en bordes */
+/* Clean vertical banner fade on mobile/tablet without subpixel seam lines */
 @media (max-width: 1023px) {
   .hero-backdrop-mask {
     -webkit-mask-image: linear-gradient(

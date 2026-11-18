@@ -9,7 +9,7 @@ import {
 export const DEMO_SERVER_URL = 'demo://jellyfin.local';
 export const DEMO_ACCESS_TOKEN = 'demo-session-token';
 
-// Flujo HLS público de prueba (Blender Foundation - Big Buck Bunny) para validar el reproductor hls.js
+// Public HLS test stream (Blender Foundation - Big Buck Bunny) to validate hls.js playback
 export const DEMO_HLS_STREAM = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
 export const DEMO_MP4_FALLBACK =
   'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
@@ -104,7 +104,7 @@ function createArtworkDataUri(
 
 export const DEMO_SYSTEM_INFO: PublicSystemInfo = {
   Id: 'demo-server-001',
-  ServerName: 'Jellyfin Hogar (Demo)',
+  ServerName: 'Demo Media Server',
   Version: '10.10.6',
   ProductName: 'Jellyfin Server',
   StartupWizardCompleted: true,
@@ -450,7 +450,7 @@ export const DEMO_ITEMS: BaseItemDto[] = [
     BackdropImageTags: ['1'],
     UserData: { IsFavorite: false, UnplayedItemCount: 12, Played: false },
   },
-  // Colecciones
+  // Collections
   {
     Id: 'demo-col-1',
     Name: 'Saga de la Tierra Media',
@@ -562,7 +562,7 @@ export function buildDemoPlaybackInfo(itemId: string): PlaybackInfoResponse {
     MediaSources: [
       {
         Id: `demo-source-${itemId}`,
-        Name: 'Stream HLS de demostración',
+        Name: 'Demo HLS Stream',
         Container: 'mp4',
         SupportsDirectPlay: false,
         SupportsDirectStream: true,

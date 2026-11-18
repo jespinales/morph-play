@@ -103,12 +103,15 @@ src/
 │   ├── BrandLogo.tsx           # Logotipo personalizable (SVG MorphPlay por defecto o imagen propia)
 │   ├── DetailModal.tsx         # Modal de detalles, temporadas, episodios, reparto y similares
 │   ├── HeroBanner.tsx          # Carrusel principal a pantalla completa
+│   ├── LanguageSwitcher.tsx    # Selector de idioma de la interfaz (ES / EN)
 │   ├── MediaCard.tsx           # Tarjetas 2:3 (póster) y 16:9 (Seguir viendo / Próximos)
 │   ├── MediaRow.tsx            # Carruseles horizontales con desplazamiento táctil
 │   ├── Navbar.tsx              # Barra superior fija y barra inferior adaptativa móvil
 │   └── VideoPlayerModal.tsx    # Reproductor HLS / Direct Play con MediaSegments
 ├── context/
-│   └── AuthContext.tsx         # Estado de servidor, sesión de usuario, marca y preferencias
+│   └── AuthContext.tsx         # Estado de servidor, sesión de usuario, idioma, marca y preferencias
+├── i18n/
+│   └── translations.ts         # Diccionario tipado de interfaz en inglés (en) y español (es)
 ├── pages/
 │   ├── CatalogPage.tsx         # Películas, Series, Colecciones, Mi lista y Búsqueda
 │   ├── HomePage.tsx            # Vista principal del catálogo

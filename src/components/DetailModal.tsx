@@ -35,7 +35,7 @@ export const DetailModal: React.FC<DetailModalProps> = ({
   onSelectItem,
   onItemMutated,
 }) => {
-  const { serverUrl, accessToken, user } = useAuth();
+  const { serverUrl, accessToken, user, t } = useAuth();
   const [detail, setDetail] = useState<BaseItemDto>(item);
   const [seasons, setSeasons] = useState<BaseItemDto[]>([]);
   const [selectedSeasonId, setSelectedSeasonId] = useState<string>('');
@@ -45,7 +45,7 @@ export const DetailModal: React.FC<DetailModalProps> = ({
   const [loadingEpisodes, setLoadingEpisodes] = useState(false);
   const [logoFailed, setLogoFailed] = useState(false);
 
-  // Bloquear scroll del documento mientras el modal está abierto y escuchar Escape
+  // Lock document scroll while modal is open and handle Escape key
   useEffect(() => {
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -61,7 +61,7 @@ export const DetailModal: React.FC<DetailModalProps> = ({
     };
   }, [onClose]);
 
-  // Cargar información detallada, temporadas/episodios, colección y títulos similares
+  // Fetch full item details, seasons/episodes, collection items, and similar titles
   useEffect(() => {
     let active = true;
     setDetail(item);
@@ -204,17 +204,17 @@ export const DetailModal: React.FC<DetailModalProps> = ({
         onClick={(e) => e.stopPropagation()}
         className="relative w-full max-w-5xl rounded-2xl overflow-hidden bg-[#12131a] border border-white/15 shadow-[0_25px_90px_rgba(0,0,0,0.9)] animate-scaleIn my-auto"
       >
-        {/* Botón cerrar */}
+        {/* Close button */}
         <button
           type="button"
           onClick={onClose}
-          aria-label="Cerrar detalles"
+          aria-label={t.detail.closeAria}
           className="absolute top-4 right-4 z-30 w-10 h-10 rounded-full bg-black/65 hover:bg-black/90 text-white border border-white/20 flex items-center justify-center transition-colors"
         >
           <X className="w-5 h-5" />
         </button>
 
-        {/* Cabecera panorámica 16:9 */}
+        {/* 16:9 panoramic header */}
         <div className="relative aspect-video max-h-[480px] w-full overflow-hidden bg-[#0a0a0e]">
           {backdropUrl ? (
             <img
@@ -250,7 +250,7 @@ export const DetailModal: React.FC<DetailModalProps> = ({
                 className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg bg-white text-black font-bold text-sm sm:text-base hover:bg-white/90 active:scale-[0.98] transition-all shadow-lg"
               >
                 <Play className="w-5 h-5 fill-black" />
-                {hasResume ? 'Reanudar' : 'Reproducir'}
+                {hasResume ? t.common.resume : t.common.play}
               </button>
 
               {detail.Type !== 'BoxSet' && (
@@ -258,7 +258,7 @@ export const DetailModal: React.FC<DetailModalProps> = ({
                   <button
                     type="button"
                     onClick={handleToggleFavorite}
-                    title={isFavorite ? 'Quitar de Mi lista' : 'Agregar a Mi lista'}
+                    title={isFavorite ? t.detail.removeFromList : t.detail.addToList}
                     className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border text-sm font-semibold transition-all ${
                       isFavorite
                         ? 'bg-[#00A4DC]/20 border-[#00A4DC] text-[#7dd3fc]'
@@ -266,13 +266,13 @@ export const DetailModal: React.FC<DetailModalProps> = ({
                     }`}
                   >
                     {isFavorite ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                    <span>{isFavorite ? 'En Mi lista' : 'Mi lista'}</span>
+                    <span>{isFavorite ? t.detail.inMyList : t.detail.myList}</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={handleTogglePlayed}
-                    title={isPlayed ? 'Marcar como no visto' : 'Marcar como visto'}
+                    title={isPlayed ? t.detail.markUnplayed : t.detail.markPlayed}
                     className={`p-2.5 rounded-lg border transition-all ${
                       isPlayed
                         ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300'
@@ -287,11 +287,11 @@ export const DetailModal: React.FC<DetailModalProps> = ({
           </div>
         </div>
 
-        {/* Cuerpo de metadatos, episodios, reparto y similares */}
+        {/* Metadata, episodes, cast, and similar titles body */}
         <div className="p-5 sm:p-8 space-y-8">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-4">
-              {/* Fila de insignias */}
+              {/* Badges row */}
               <div className="flex flex-wrap items-center gap-2.5 text-sm text-zinc-300">
                 {detail.CommunityRating && (
                   <span className="inline-flex items-center gap-1 text-emerald-400 font-bold">
@@ -335,52 +335,52 @@ export const DetailModal: React.FC<DetailModalProps> = ({
               )}
 
               <p className="text-sm sm:text-base text-zinc-200 leading-relaxed">
-                {detail.Overview || 'Sin sinopsis disponible en el servidor.'}
+                {detail.Overview || t.detail.noOverview}
               </p>
             </div>
 
-            {/* Columna derecha de información rápida */}
+            {/* Right quick info column */}
             <div className="space-y-2.5 text-xs sm:text-sm bg-white/[0.03] border border-white/10 rounded-xl p-4 h-fit">
               {detail.Genres && detail.Genres.length > 0 && (
                 <div>
-                  <span className="text-zinc-400">Géneros: </span>
+                  <span className="text-zinc-400">{t.detail.genres} </span>
                   <span className="text-zinc-100 font-medium">{detail.Genres.join(', ')}</span>
                 </div>
               )}
               {detail.OriginalTitle && detail.OriginalTitle !== detail.Name && (
                 <div>
-                  <span className="text-zinc-400">Título original: </span>
+                  <span className="text-zinc-400">{t.detail.originalTitle} </span>
                   <span className="text-zinc-100">{detail.OriginalTitle}</span>
                 </div>
               )}
               {detail.Studios && detail.Studios.length > 0 && (
                 <div>
-                  <span className="text-zinc-400">Estudio: </span>
+                  <span className="text-zinc-400">{t.detail.studio} </span>
                   <span className="text-zinc-100">
                     {detail.Studios.map((s) => s.Name).join(', ')}
                   </span>
                 </div>
               )}
               <div>
-                <span className="text-zinc-400">Formato: </span>
+                <span className="text-zinc-400">{t.detail.format} </span>
                 <span className="text-zinc-100">
                   {detail.Type === 'Series'
-                    ? 'Serie'
+                    ? t.detail.formatSeries
                     : detail.Type === 'BoxSet'
-                      ? 'Colección'
-                      : 'Película'}
+                      ? t.detail.formatCollection
+                      : t.detail.formatMovie}
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Temporadas y Episodios (si es Serie) */}
+          {/* Seasons & Episodes (for Series) */}
           {detail.Type === 'Series' && (
             <section className="space-y-4 pt-2 border-t border-white/10">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h3 className="text-lg font-bold text-white flex items-center gap-2">
                   <Film className="w-5 h-5 text-[#00A4DC]" />
-                  Episodios
+                  {t.detail.episodes}
                 </h3>
 
                 {seasons.length > 0 && (
@@ -410,7 +410,7 @@ export const DetailModal: React.FC<DetailModalProps> = ({
                   ))}
                 </div>
               ) : episodes.length === 0 ? (
-                <p className="text-sm text-zinc-400">No hay episodios disponibles en esta temporada.</p>
+                <p className="text-sm text-zinc-400">{t.detail.noEpisodesInSeason}</p>
               ) : (
                 <div className="divide-y divide-white/10 rounded-xl border border-white/10 bg-[#0d0e14]/70 overflow-hidden">
                   {episodes.map((ep, index) => {
@@ -484,12 +484,12 @@ export const DetailModal: React.FC<DetailModalProps> = ({
             </section>
           )}
 
-          {/* Elementos de Colección (si es BoxSet) */}
+          {/* Collection items (for BoxSet) */}
           {detail.Type === 'BoxSet' && collectionItems.length > 0 && (
             <section className="space-y-4 pt-2 border-t border-white/10">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <Layers className="w-5 h-5 text-[#AA5CC3]" />
-                Títulos en esta colección
+                {t.detail.collectionItems}
               </h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
                 {collectionItems.map((colItem) => {
@@ -524,10 +524,10 @@ export const DetailModal: React.FC<DetailModalProps> = ({
             </section>
           )}
 
-          {/* Reparto principal */}
+          {/* Main cast */}
           {cast.length > 0 && (
             <section className="space-y-3 pt-2 border-t border-white/10">
-              <h3 className="text-lg font-bold text-white">Reparto principal</h3>
+              <h3 className="text-lg font-bold text-white">{t.detail.cast}</h3>
               <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1">
                 {cast.map((person) => {
                   const photo = getPersonImageUrl(serverUrl, person.Id, person.PrimaryImageTag);
@@ -565,10 +565,10 @@ export const DetailModal: React.FC<DetailModalProps> = ({
             </section>
           )}
 
-          {/* Títulos similares */}
+          {/* Similar titles */}
           {similar.length > 0 && (
             <section className="space-y-4 pt-2 border-t border-white/10">
-              <h3 className="text-lg font-bold text-white">Títulos similares</h3>
+              <h3 className="text-lg font-bold text-white">{t.detail.similarTitles}</h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
                 {similar.slice(0, 8).map((simItem) => {
                   const simBackdrop = getItemImageUrl(serverUrl, simItem, 'Backdrop', 500);

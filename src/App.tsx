@@ -19,7 +19,7 @@ interface PlaybackState {
 }
 
 const AppShell: React.FC = () => {
-  const { serverUrl, user, accessToken, isAuthenticated, isInitializing, brand } = useAuth();
+  const { serverUrl, user, accessToken, isAuthenticated, isInitializing, brand, t } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -28,7 +28,7 @@ const AppShell: React.FC = () => {
   const [mutatedItems, setMutatedItems] = useState<Record<string, BaseItemDto>>({});
   const [refreshSignal, setRefreshSignal] = useState(0);
 
-  // Al cerrar sesión o cambiar de perfil, limpiar estado local y regresar a la ruta raíz '/'
+  // Clear local modal/mutation state when signing out or switching profiles
   useEffect(() => {
     setDetailItem(null);
     setPlayback(null);
@@ -64,7 +64,7 @@ const AppShell: React.FC = () => {
       try {
         await jellyfinApi.toggleFavorite(serverUrl, accessToken, user.Id, item.Id, nextFav);
       } catch {
-        // Revertir si falla
+        // Revert optimistic update on failure
         handleItemMutated(item);
       }
     },
@@ -79,7 +79,7 @@ const AppShell: React.FC = () => {
     return (
       <div className="min-h-screen bg-[#0a0a0e] flex flex-col items-center justify-center gap-4">
         <BrandLogo iconSize={54} showText={false} className="animate-pulse" />
-        <p className="text-sm text-zinc-400 font-medium">Iniciando {brand.appName}…</p>
+        <p className="text-sm text-zinc-400 font-medium">{t.app.initializing(brand.appName)}</p>
       </div>
     );
   }
@@ -181,7 +181,7 @@ const AppShell: React.FC = () => {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
-      {/* Modal superpuesto de detalles */}
+      {/* Overlay details modal */}
       {detailItem && (
         <DetailModal
           item={mutatedItems[detailItem.Id] ?? detailItem}
@@ -192,7 +192,7 @@ const AppShell: React.FC = () => {
         />
       )}
 
-      {/* Reproductor de video a pantalla completa */}
+      {/* Fullscreen video player modal */}
       {playback && (
         <VideoPlayerModal
           item={playback.item}

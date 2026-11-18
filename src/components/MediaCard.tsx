@@ -23,15 +23,16 @@ export const MediaCard: React.FC<MediaCardProps> = ({
   variant = 'poster',
   rank,
   fullWidth = false,
-  removeLabel = 'Quitar de esta sección',
+  removeLabel,
   onPlay,
   onOpenDetail,
   onToggleFavorite,
   onRemove,
 }) => {
-  const { serverUrl } = useAuth();
+  const { serverUrl, t } = useAuth();
   const [imgError, setImgError] = useState(false);
 
+  const effectiveRemoveLabel = removeLabel ?? t.card.defaultRemove;
   const isContinue = variant === 'continue';
   const imageUrl = !imgError
     ? getItemImageUrl(serverUrl, item, isContinue ? 'Backdrop' : 'Primary', isContinue ? 640 : 420)
@@ -41,7 +42,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
   const unplayedCount = item.UserData?.UnplayedItemCount;
   const isPlayed = Boolean(item.UserData?.Played);
 
-  // Calcular porcentaje de progreso para "Seguir viendo"
+  // Compute progress percentage for Continue Watching cards
   const progressPercent = (() => {
     if (typeof item.UserData?.PlayedPercentage === 'number') {
       return Math.min(100, Math.max(0, item.UserData.PlayedPercentage));
@@ -57,7 +58,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
   if (isContinue) {
     const episodeLabel =
       item.Type === 'Episode' && item.ParentIndexNumber !== undefined && item.IndexNumber !== undefined
-        ? `T${item.ParentIndexNumber}:E${item.IndexNumber} · ${item.Name}`
+        ? `${t.common.episodeCode(item.ParentIndexNumber, item.IndexNumber)} · ${item.Name}`
         : item.ProductionYear
           ? `${item.ProductionYear}`
           : '';
@@ -81,38 +82,38 @@ export const MediaCard: React.FC<MediaCardProps> = ({
             </div>
           )}
 
-          {/* Degradado inferior */}
+          {/* Bottom gradient */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/35 to-transparent pointer-events-none" />
 
-          {/* Área principal táctil/clic para reproducir (hermana de los botones secundarios) */}
+          {/* Primary tap/click trigger for playback (sibling of secondary icon buttons) */}
           <button
             type="button"
             onClick={() => onPlay(item)}
-            aria-label={`Reproducir ${displayTitle}`}
+            aria-label={t.card.playAria(displayTitle)}
             className="absolute inset-0 z-10 w-full h-full cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#00A4DC]"
           />
 
-          {/* Botón discreto para quitar de Seguir viendo / Próximos episodios */}
+          {/* Discrete remove button for Continue Watching / Next Up */}
           {onRemove && (
             <button
               type="button"
               onClick={() => onRemove(item)}
-              aria-label={`${removeLabel}: ${displayTitle}`}
-              title={removeLabel}
+              aria-label={`${effectiveRemoveLabel}: ${displayTitle}`}
+              title={effectiveRemoveLabel}
               className="absolute top-2 right-2 z-20 w-9 h-9 flex items-center justify-center rounded-full bg-black/60 hover:bg-rose-600/90 active:scale-95 text-white/85 hover:text-white border border-white/15 backdrop-blur-sm opacity-90 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 focus-visible:opacity-100 transition-all"
             >
               <X className="w-4 h-4" />
             </button>
           )}
 
-          {/* Icono central de Play */}
+          {/* Centered play icon */}
           <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none opacity-90 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity duration-200">
             <div className="w-12 h-12 rounded-full bg-white/90 text-black flex items-center justify-center shadow-2xl transform [@media(hover:hover)]:group-hover:scale-105 transition-transform">
               <Play className="w-5 h-5 fill-black ml-0.5" />
             </div>
           </div>
 
-          {/* Título y episodio superpuestos limpiamente */}
+          {/* Title and episode label */}
           <div className="absolute bottom-3 left-3 right-12 z-10 pointer-events-none">
             <h3 className="text-sm font-bold text-white truncate drop-shadow">{displayTitle}</h3>
             {episodeLabel && (
@@ -120,18 +121,18 @@ export const MediaCard: React.FC<MediaCardProps> = ({
             )}
           </div>
 
-          {/* Botón rápido de detalles */}
+          {/* Quick details button */}
           <button
             type="button"
             onClick={() => onOpenDetail(item)}
-            aria-label={`Detalles de ${displayTitle}`}
-            title="Más información"
+            aria-label={t.card.detailsAria(displayTitle)}
+            title={t.card.moreInfo}
             className="absolute bottom-2 right-2 z-20 w-9 h-9 flex items-center justify-center rounded-full bg-black/60 hover:bg-white/25 active:scale-95 text-white/90 border border-white/15 transition-all"
           >
             <Info className="w-4 h-4" />
           </button>
 
-          {/* Barra de progreso */}
+          {/* Progress bar */}
           {progressPercent > 0 && (
             <div className="absolute bottom-0 inset-x-0 h-1 bg-white/20 z-10 pointer-events-none">
               <div
@@ -175,7 +176,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
         </div>
       )}
 
-      {/* Insignias superiores discretas */}
+      {/* Subtle top status badges */}
       <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10 pointer-events-none">
         {typeof unplayedCount === 'number' && unplayedCount > 0 && (
           <span className="px-1.5 py-0.5 rounded-md bg-[#00A4DC] text-white text-[11px] font-bold shadow">
@@ -184,7 +185,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
         )}
         {isPlayed && !unplayedCount && (
           <span
-            title="Visto"
+            title={t.card.watched}
             className="w-5 h-5 rounded-full bg-emerald-500/90 text-black flex items-center justify-center shadow"
           >
             <Check className="w-3.5 h-3.5 stroke-[3]" />
@@ -192,7 +193,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
         )}
       </div>
 
-      {/* Overlay limpio al pasar el cursor (solo en dispositivos con puntero hover; en táctil abre Detalles) */}
+      {/* Hover action overlay on pointer devices (touch taps open Details directly) */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/45 to-transparent opacity-0 pointer-events-none [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-hover:pointer-events-auto group-focus-visible:opacity-100 group-focus-within:opacity-100 group-focus-within:pointer-events-auto transition-opacity duration-200 flex flex-col justify-end p-3">
         <div className="flex items-center gap-1.5 mb-2">
           <button
@@ -201,7 +202,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
               e.stopPropagation();
               onPlay(item);
             }}
-            aria-label={`Reproducir ${item.Name}`}
+            aria-label={t.card.playAria(item.Name)}
             className="w-9 h-9 rounded-full bg-white text-black hover:bg-white/90 flex items-center justify-center shadow transition-transform active:scale-95"
           >
             <Play className="w-4 h-4 fill-black ml-0.5" />
@@ -214,8 +215,8 @@ export const MediaCard: React.FC<MediaCardProps> = ({
                 e.stopPropagation();
                 onToggleFavorite(item);
               }}
-              aria-label={isFavorite ? 'Quitar de Mi lista' : 'Agregar a Mi lista'}
-              title={isFavorite ? 'Quitar de Mi lista' : 'Agregar a Mi lista'}
+              aria-label={isFavorite ? t.card.removeFromList : t.card.addToList}
+              title={isFavorite ? t.card.removeFromList : t.card.addToList}
               className={`w-9 h-9 rounded-full border flex items-center justify-center transition-colors ${
                 isFavorite
                   ? 'bg-[#00A4DC]/25 border-[#00A4DC] text-[#00A4DC]'
@@ -232,7 +233,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
               e.stopPropagation();
               onOpenDetail(item);
             }}
-            aria-label={`Más información sobre ${item.Name}`}
+            aria-label={t.card.moreInfoAria(item.Name)}
             className="ml-auto w-9 h-9 rounded-full bg-black/50 border border-white/35 text-white hover:border-white flex items-center justify-center transition-colors"
           >
             <Info className="w-4 h-4" />

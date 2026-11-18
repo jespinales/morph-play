@@ -12,6 +12,7 @@ import {
   X,
 } from 'lucide-react';
 import { BrandLogo } from '../components/BrandLogo';
+import { LanguageSwitcher } from '../components/LanguageSwitcher';
 import { useAuth } from '../context/AuthContext';
 import { UserDto } from '../types/jellyfin';
 import { getUserAvatarUrl, jellyfinApi } from '../services/jellyfinApi';
@@ -24,6 +25,7 @@ export const ProfileSelectPage: React.FC = () => {
     isDemo,
     savedProfiles,
     brand,
+    t,
     loginWithCredentials,
     loginWithSavedProfile,
     removeSavedProfile,
@@ -48,12 +50,12 @@ export const ProfileSelectPage: React.FC = () => {
     try {
       const users = await jellyfinApi.getPublicUsers(serverUrl);
       setPublicUsers(users);
-      // Solo abrir login manual automático si tampoco hay perfiles recordados en este dispositivo
+      // Only open manual sign-in automatically when no local profiles are remembered
       if (users.length === 0 && savedProfiles.length === 0) {
         setManualModalOpen(true);
       }
     } catch {
-      setFetchError('No se pudieron obtener los perfiles del servidor. Verifica que esté en línea.');
+      setFetchError(t.profiles.fetchError);
     } finally {
       setLoadingUsers(false);
     }
@@ -103,7 +105,7 @@ export const ProfileSelectPage: React.FC = () => {
       try {
         await loginWithCredentials(profile.Name, '');
       } catch {
-        // Si el servidor exige contraseña aunque HasPassword fuera false, abrir modal
+        // Open password modal if the server still requires credentials despite HasPassword=false
         setSelectedUser(profile);
         setUsername(profile.Name);
       } finally {
@@ -120,7 +122,7 @@ export const ProfileSelectPage: React.FC = () => {
     e.preventDefault();
     const targetUser = selectedUser?.Name ?? username.trim();
     if (!targetUser) {
-      setAuthError('Ingresa un nombre de usuario.');
+      setAuthError(t.profiles.emptyUsernameError);
       return;
     }
 
@@ -129,7 +131,7 @@ export const ProfileSelectPage: React.FC = () => {
     try {
       await loginWithCredentials(targetUser, password);
     } catch {
-      setAuthError('Usuario o contraseña incorrectos.');
+      setAuthError(t.profiles.invalidCredentials);
     } finally {
       setAuthLoading(false);
     }
@@ -144,16 +146,18 @@ export const ProfileSelectPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#0a0a0e] relative flex flex-col justify-between px-4 sm:px-8 py-8">
-      {/* Cabecera */}
+      {/* Header */}
       <header className="max-w-6xl w-full mx-auto flex items-center justify-between gap-4">
         <BrandLogo iconSize={32} />
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 sm:gap-3">
           <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs text-zinc-300">
             <Server className="w-3.5 h-3.5 text-[#00A4DC]" />
             <span>{serverInfo?.ServerName ?? serverUrl}</span>
-            {isDemo && <span className="text-[#7dd3fc] font-semibold">· Demo</span>}
+            {isDemo && <span className="text-[#7dd3fc] font-semibold">· {t.common.demoShort}</span>}
           </div>
+
+          <LanguageSwitcher compact />
 
           {!isEnvServerLocked && (
             <button
@@ -162,27 +166,25 @@ export const ProfileSelectPage: React.FC = () => {
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs sm:text-sm text-zinc-300 hover:text-white transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
-              Cambiar servidor
+              {t.profiles.changeServer}
             </button>
           )}
         </div>
       </header>
 
-      {/* Selector central de perfiles */}
+      {/* Center profile selector */}
       <main className="max-w-4xl w-full mx-auto my-auto py-12 text-center space-y-10 animate-fadeIn">
         <div className="space-y-2">
           <h1 className="text-3xl sm:text-5xl font-bold tracking-tight text-white">
-            ¿Quién está viendo?
+            {t.profiles.whoIsWatching}
           </h1>
-          <p className="text-sm sm:text-base text-zinc-400">
-            Elige un perfil para acceder a tus bibliotecas y continuar donde lo dejaste.
-          </p>
+          <p className="text-sm sm:text-base text-zinc-400">{t.profiles.subtitle}</p>
         </div>
 
         {loadingUsers && displayedProfiles.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 gap-3">
             <Loader2 className="w-10 h-10 text-[#00A4DC] animate-spin" />
-            <p className="text-sm text-zinc-400">Cargando perfiles del servidor…</p>
+            <p className="text-sm text-zinc-400">{t.profiles.loadingProfiles}</p>
           </div>
         ) : fetchError && displayedProfiles.length === 0 ? (
           <div className="max-w-md mx-auto rounded-2xl bg-[#12131a] border border-rose-500/30 p-6 space-y-4">
@@ -195,14 +197,14 @@ export const ProfileSelectPage: React.FC = () => {
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-sm font-semibold text-white"
               >
                 <RefreshCw className="w-4 h-4" />
-                Reintentar
+                {t.profiles.retry}
               </button>
               <button
                 type="button"
                 onClick={() => setManualModalOpen(true)}
                 className="px-4 py-2 rounded-lg bg-gradient-to-r from-[#AA5CC3] to-[#00A4DC] text-sm font-semibold text-white"
               >
-                Login manual
+                {t.profiles.manualLogin}
               </button>
             </div>
           </div>
@@ -239,7 +241,7 @@ export const ProfileSelectPage: React.FC = () => {
 
                       {hasLock && (
                         <span
-                          title="Requiere contraseña"
+                          title={t.profiles.requiresPassword}
                           className="absolute bottom-2 right-2 w-7 h-7 rounded-full bg-black/75 backdrop-blur-sm border border-white/15 flex items-center justify-center text-zinc-200"
                         >
                           <Lock className="w-3.5 h-3.5" />
@@ -256,8 +258,8 @@ export const ProfileSelectPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => removeSavedProfile(profile.Id)}
-                      aria-label={`Olvidar perfil ${profile.Name}`}
-                      title="Quitar perfil de este dispositivo"
+                      aria-label={t.profiles.forgetProfileAria(profile.Name)}
+                      title={t.profiles.forgetProfileTitle}
                       className="absolute top-1.5 right-1.5 z-10 w-8 h-8 rounded-full bg-black/70 hover:bg-rose-600/90 text-white/85 hover:text-white border border-white/15 backdrop-blur-sm flex items-center justify-center opacity-90 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 focus-visible:opacity-100 transition-all"
                     >
                       <X className="w-4 h-4" />
@@ -267,7 +269,7 @@ export const ProfileSelectPage: React.FC = () => {
               );
             })}
 
-            {/* Opción de acceso manual */}
+            {/* Manual login option */}
             <button
               type="button"
               onClick={() => {
@@ -283,7 +285,7 @@ export const ProfileSelectPage: React.FC = () => {
                 <PlusCircle className="w-10 h-10 text-zinc-400 group-hover:text-white transition-colors" />
               </div>
               <span className="text-sm sm:text-base font-medium text-zinc-400 group-hover:text-white transition-colors">
-                Otra cuenta
+                {t.profiles.otherAccount}
               </span>
             </button>
           </div>
@@ -296,7 +298,7 @@ export const ProfileSelectPage: React.FC = () => {
           : brand.appName}
       </footer>
 
-      {/* Modal de contraseña / inicio de sesión manual */}
+      {/* Password / manual sign-in modal */}
       {(selectedUser || manualModalOpen) && (
         <div
           onClick={closeModals}
@@ -309,7 +311,7 @@ export const ProfileSelectPage: React.FC = () => {
             <button
               type="button"
               onClick={closeModals}
-              aria-label="Cerrar"
+              aria-label={t.profiles.closeAria}
               className="absolute top-3 right-3 w-9 h-9 rounded-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/10"
             >
               <X className="w-5 h-5" />
@@ -317,12 +319,10 @@ export const ProfileSelectPage: React.FC = () => {
 
             <div className="space-y-1">
               <h2 className="text-xl font-bold text-white">
-                {selectedUser ? `Hola, ${selectedUser.Name}` : 'Iniciar sesión'}
+                {selectedUser ? t.profiles.helloUser(selectedUser.Name) : t.profiles.signIn}
               </h2>
               <p className="text-xs text-zinc-400">
-                {selectedUser
-                  ? 'Ingresa la contraseña de tu perfil para continuar.'
-                  : 'Accede con un usuario registrado en este servidor.'}
+                {selectedUser ? t.profiles.enterProfilePassword : t.profiles.enterRegisteredUser}
               </p>
             </div>
 
@@ -330,7 +330,7 @@ export const ProfileSelectPage: React.FC = () => {
               {!selectedUser && (
                 <div className="space-y-1.5">
                   <label htmlFor="manual-user" className="text-xs font-medium text-zinc-300">
-                    Usuario
+                    {t.profiles.usernameLabel}
                   </label>
                   <div className="relative">
                     <UserIcon className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -340,7 +340,7 @@ export const ProfileSelectPage: React.FC = () => {
                       type="text"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      placeholder="Nombre de usuario"
+                      placeholder={t.profiles.usernamePlaceholder}
                       autoFocus
                       className="w-full pl-10 pr-3 py-2.5 rounded-xl bg-[#0a0a0e] border border-white/15 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#00A4DC]"
                     />
@@ -350,7 +350,7 @@ export const ProfileSelectPage: React.FC = () => {
 
               <div className="space-y-1.5">
                 <label htmlFor="profile-pw" className="text-xs font-medium text-zinc-300">
-                  Contraseña
+                  {t.profiles.passwordLabel}
                 </label>
                 <div className="relative">
                   <KeyRound className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -360,7 +360,7 @@ export const ProfileSelectPage: React.FC = () => {
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Contraseña (deja vacío si no tiene)"
+                    placeholder={t.profiles.passwordPlaceholder}
                     autoFocus={Boolean(selectedUser)}
                     className="w-full pl-10 pr-3 py-2.5 rounded-xl bg-[#0a0a0e] border border-white/15 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#00A4DC]"
                   />
@@ -382,10 +382,10 @@ export const ProfileSelectPage: React.FC = () => {
                 {authLoading ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Verificando…
+                    {t.profiles.verifying}
                   </>
                 ) : (
-                  'Entrar'
+                  t.profiles.enter
                 )}
               </button>
             </form>

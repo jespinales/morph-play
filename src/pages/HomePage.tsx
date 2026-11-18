@@ -22,7 +22,7 @@ export const HomePage: React.FC<HomePageProps> = ({
   onToggleFavorite,
   mutatedItems,
 }) => {
-  const { serverUrl, accessToken, user } = useAuth();
+  const { serverUrl, accessToken, user, t } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [featured, setFeatured] = useState<BaseItemDto[]>([]);
@@ -39,7 +39,7 @@ export const HomePage: React.FC<HomePageProps> = ({
     async function fetchHomeData() {
       if (!serverUrl || !accessToken || !user) return;
       try {
-        const [resume, nextUp, movies, series, top, favs, action] = await Promise.all([
+        const [resume, nextUp, movies, series, top, favs, actionPrimary] = await Promise.all([
           jellyfinApi.getResumeItems(serverUrl, accessToken, user.Id).catch(() => []),
           jellyfinApi.getNextUpItems(serverUrl, accessToken, user.Id).catch(() => []),
           jellyfinApi.getLatestItems(serverUrl, accessToken, user.Id, 'Movie', 16).catch(() => []),
@@ -64,16 +64,29 @@ export const HomePage: React.FC<HomePageProps> = ({
           jellyfinApi
             .getItems(serverUrl, accessToken, user.Id, {
               includeItemTypes: 'Movie',
-              genres: 'Acción',
+              genres: 'Action',
               limit: 16,
             })
             .then((r) => r.Items)
             .catch(() => []),
         ]);
 
+        // Fallback to Spanish genre tag for libraries configured with Spanish metadata
+        const action =
+          actionPrimary.length > 0
+            ? actionPrimary
+            : await jellyfinApi
+                .getItems(serverUrl, accessToken, user.Id, {
+                  includeItemTypes: 'Movie',
+                  genres: 'Acción',
+                  limit: 16,
+                })
+                .then((r) => r.Items)
+                .catch(() => []);
+
         if (!active) return;
 
-        // Seleccionar los mejores títulos para el HeroBanner
+        // Pick top candidates for HeroBanner
         const heroPool = [...top, ...movies, ...series].filter(
           (item, index, arr) =>
             arr.findIndex((x) => x.Id === item.Id) === index &&
@@ -184,10 +197,10 @@ export const HomePage: React.FC<HomePageProps> = ({
 
       <div className="relative z-20 -mt-8 sm:-mt-14 space-y-3 sm:space-y-5">
         <MediaRow
-          title="Seguir viendo"
+          title={t.home.continueWatching}
           items={hydrate(resumeItems)}
           variant="continue"
-          removeLabel="Quitar de Seguir viendo"
+          removeLabel={t.home.removeFromContinue}
           onPlay={onPlay}
           onOpenDetail={onOpenDetail}
           onToggleFavorite={onToggleFavorite}
@@ -195,10 +208,10 @@ export const HomePage: React.FC<HomePageProps> = ({
         />
 
         <MediaRow
-          title="Próximos episodios"
+          title={t.home.nextEpisodes}
           items={hydrate(dedupedNextUpItems)}
           variant="continue"
-          removeLabel="Quitar de Próximos episodios"
+          removeLabel={t.home.removeFromNextUp}
           onPlay={onPlay}
           onOpenDetail={onOpenDetail}
           onToggleFavorite={onToggleFavorite}
@@ -206,7 +219,7 @@ export const HomePage: React.FC<HomePageProps> = ({
         />
 
         <MediaRow
-          title="Reciente en Películas"
+          title={t.home.recentMovies}
           items={hydrate(latestMovies)}
           seeAllTo="/peliculas"
           onPlay={onPlay}
@@ -215,7 +228,7 @@ export const HomePage: React.FC<HomePageProps> = ({
         />
 
         <MediaRow
-          title="Reciente en Series"
+          title={t.home.recentSeries}
           items={hydrate(latestSeries)}
           seeAllTo="/series"
           onPlay={onPlay}
@@ -224,7 +237,7 @@ export const HomePage: React.FC<HomePageProps> = ({
         />
 
         <MediaRow
-          title="Top 10 mejor valorados"
+          title={t.home.topRated}
           items={hydrate(topRated).slice(0, 10)}
           onPlay={onPlay}
           onOpenDetail={onOpenDetail}
@@ -233,7 +246,7 @@ export const HomePage: React.FC<HomePageProps> = ({
 
         {hydratedFavs.length > 0 && (
           <MediaRow
-            title="Mi lista"
+            title={t.home.myList}
             items={hydratedFavs}
             seeAllTo="/mi-lista"
             onPlay={onPlay}
@@ -243,7 +256,7 @@ export const HomePage: React.FC<HomePageProps> = ({
         )}
 
         <MediaRow
-          title="Acción y aventura"
+          title={t.home.actionAndAdventure}
           items={hydrate(actionMovies)}
           onPlay={onPlay}
           onOpenDetail={onOpenDetail}

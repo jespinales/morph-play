@@ -32,7 +32,7 @@ const DEVICE_ID_KEY = 'jellyfin_device_id';
 const CLIENT_NAME = 'MorphPlay';
 const CLIENT_VERSION = '1.0.0';
 
-// Estado en memoria para mutaciones interactivas en Modo Demostración
+// In-memory state for interactive mutations in Demo Mode
 const demoFavoriteOverrides = new Map<string, boolean>();
 const demoPlayedOverrides = new Map<string, boolean>();
 const demoProgressOverrides = new Map<string, number>();
@@ -66,8 +66,8 @@ export function normalizeServerUrl(rawUrl: string): string {
 }
 
 /**
- * Obtiene la URL del servidor configurada por entorno (Docker / Vite).
- * Devuelve cadena vacía si no fue preconfigurada.
+ * Reads the Jellyfin server URL configured via runtime environment (Docker / Vite).
+ * Returns an empty string when not preconfigured.
  */
 export function getEnvConfiguredServerUrl(): string {
   const runtimeUrl = window.__ENV__?.JELLYFIN_SERVER_URL?.trim();
@@ -93,7 +93,7 @@ export function isSafeLogoUrl(rawUrl: string | undefined | null): boolean {
 }
 
 /**
- * Obtiene el nombre y logotipo configurados por entorno (Docker / Vite).
+ * Reads the brand name and logo URL configured via runtime environment (Docker / Vite).
  */
 export function getEnvConfiguredBrand(): BrandConfig {
   const runtimeName = window.__ENV__?.APP_NAME?.trim();
@@ -159,12 +159,12 @@ async function apiRequest<T>(
     });
 
     if (!response.ok) {
-      let detail = `Error HTTP ${response.status}`;
+      let detail = `HTTP error ${response.status}`;
       try {
         const text = await response.text();
         if (text) detail = text;
       } catch {
-        // Ignorar errores al leer cuerpo de error
+        // Ignore errors while reading error response body
       }
       throw new Error(detail);
     }
@@ -253,9 +253,9 @@ export const jellyfinApi = {
   async getUserViews(serverUrl: string, token: string, userId: string): Promise<BaseItemDto[]> {
     if (isDemoServer(serverUrl)) {
       return [
-        { Id: 'view-movies', Name: 'Películas', Type: 'CollectionFolder', CollectionType: 'movies' },
+        { Id: 'view-movies', Name: 'Movies', Type: 'CollectionFolder', CollectionType: 'movies' },
         { Id: 'view-series', Name: 'Series', Type: 'CollectionFolder', CollectionType: 'tvshows' },
-        { Id: 'view-boxsets', Name: 'Colecciones', Type: 'CollectionFolder', CollectionType: 'boxsets' },
+        { Id: 'view-boxsets', Name: 'Collections', Type: 'CollectionFolder', CollectionType: 'boxsets' },
       ];
     }
     const res = await apiRequest<ItemsResult>(serverUrl, `/Users/${userId}/Views`, { token });
@@ -481,8 +481,8 @@ export const jellyfinApi = {
       return [1, 2, 3].map((epNum) =>
         applyDemoOverrides({
           Id: `${seriesId}-e${epNum}`,
-          Name: `Capítulo ${epNum}`,
-          SeriesName: parent?.Name ?? 'Serie',
+          Name: `Episode ${epNum}`,
+          SeriesName: parent?.Name ?? 'Series',
           SeriesId: seriesId,
           SeasonId: seasonId ?? `${seriesId}-s1`,
           Type: 'Episode',
@@ -604,7 +604,7 @@ export const jellyfinApi = {
       demoRemovedNextUp.add(item.Id);
       return;
     }
-    // 1. Limpiar progreso parcial del episodio actual
+    // 1. Clear partial playback progress for the current episode
     await apiRequest(
       serverUrl,
       `/UserItems/${item.Id}/UserData?userId=${encodeURIComponent(userId)}`,
@@ -617,7 +617,7 @@ export const jellyfinApi = {
         },
       }
     );
-    // 2. Si pertenece a una serie, restablecer su estado visto para retirarla de NextUp
+    // 2. If it belongs to a series, reset its played state to remove it from Next Up
     if (item.SeriesId) {
       await apiRequest(
         serverUrl,
@@ -726,7 +726,7 @@ export const jellyfinApi = {
       );
       return res.Items ?? [];
     } catch {
-      // Manejo silencioso para servidores Jellyfin anteriores a 10.10 o ítems sin segmentos
+      // Silently ignore on Jellyfin servers older than 10.10 or items without segments
       return [];
     }
   },
@@ -757,7 +757,7 @@ export const jellyfinApi = {
         },
       });
     } catch {
-      // No interrumpir reproducción si falla reporte de telemetría
+      // Do not interrupt playback if telemetry reporting fails
     }
   },
 
@@ -791,7 +791,7 @@ export const jellyfinApi = {
         },
       });
     } catch {
-      // Silencioso
+      // Ignore telemetry failures
     }
   },
 
@@ -816,7 +816,7 @@ export const jellyfinApi = {
         body: payload,
       });
     } catch {
-      // Silencioso
+      // Ignore telemetry failures
     }
   },
 };
@@ -839,7 +839,7 @@ export function getItemImageUrl(
   maxWidth = 800
 ): string | null {
   if (isDemoServer(serverUrl)) {
-    if (type === 'Logo') return null; // En modo demo usamos el título tipográfico en Hero
+    if (type === 'Logo') return null; // In demo mode we render the typographic title in HeroBanner
     if (type === 'Backdrop' && item.SeriesId && !item.BackdropImageTags?.length) {
       return getDemoImageUrl(item.Id, 'Backdrop', item.Name);
     }
@@ -966,8 +966,8 @@ export function buildPlaybackStream(
     .filter((s) => s.Type === 'Subtitle' && (s.SupportsExternalStream || s.IsExternal || s.Codec === 'subrip' || s.Codec === 'srt' || s.Codec === 'vtt'))
     .map((s) => ({
       index: s.Index,
-      label: s.DisplayTitle || s.Title || s.Language || `Subtítulo ${s.Index}`,
-      language: s.Language || 'es',
+      label: s.DisplayTitle || s.Title || s.Language || `Subtitle ${s.Index}`,
+      language: s.Language || 'en',
       src: `${base}/Videos/${itemId}/${mediaSource.Id}/Subtitles/${s.Index}/0/Stream.vtt?api_key=${encodeURIComponent(token)}`,
       isDefault: Boolean(s.IsDefault),
     }));
@@ -1031,9 +1031,9 @@ export function formatDurationFromTicks(ticks?: number): string {
   const hours = Math.floor(totalMinutes / 60);
   const mins = totalMinutes % 60;
   if (hours > 0) {
-    return mins > 0 ? `${hours} h ${mins} min` : `${hours} h`;
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
   }
-  return `${mins} min`;
+  return `${mins}m`;
 }
 
 export function formatPlayerTime(seconds: number): string {
@@ -1091,7 +1091,7 @@ export function selectTrickplayInfo(
   );
   if (candidates.length === 0) return null;
 
-  // Elegir la resolución más cercana a 320 px para equilibrar nitidez y velocidad de carga
+  // Pick the width closest to 320px to balance sharpness and tile load speed
   candidates.sort((a, b) => Math.abs(a.Width - 320) - Math.abs(b.Width - 320));
   return {
     mediaSourceId,

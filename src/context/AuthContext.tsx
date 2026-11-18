@@ -16,6 +16,13 @@ import {
   normalizeServerUrl,
 } from '../services/jellyfinApi';
 import { DEMO_ACCESS_TOKEN, DEMO_SERVER_URL } from '../services/demoData';
+import {
+  getInitialLocale,
+  Locale,
+  STORAGE_LOCALE_KEY,
+  TranslationDictionary,
+  translations,
+} from '../i18n/translations';
 
 const STORAGE_SERVER_KEY = 'jellyfin_server_url';
 const STORAGE_TOKEN_KEY = 'jellyfin_access_token';
@@ -44,6 +51,8 @@ interface AuthContextValue {
   preferences: UserPreferences;
   brand: BrandConfig;
   brandOverride: Partial<BrandConfig>;
+  locale: Locale;
+  t: TranslationDictionary;
   connectToServer: (url: string) => Promise<PublicSystemInfo>;
   enableDemoMode: () => Promise<void>;
   loginWithCredentials: (username: string, password: string) => Promise<void>;
@@ -54,6 +63,7 @@ interface AuthContextValue {
   updatePreferences: (patch: Partial<UserPreferences>) => void;
   updateBrand: (patch: Partial<BrandConfig>) => void;
   resetBrand: () => void;
+  setLocale: (next: Locale) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -68,12 +78,18 @@ function loadStoredUser(): UserDto | null {
 }
 
 function loadStoredPreferences(): UserPreferences {
+  const localeDefaultLang = getInitialLocale() === 'es' ? 'spa' : 'eng';
+  const baseDefaults: UserPreferences = {
+    ...DEFAULT_USER_PREFERENCES,
+    preferredAudioLang: localeDefaultLang,
+    preferredSubtitleLang: localeDefaultLang,
+  };
   try {
     const raw = localStorage.getItem(STORAGE_PREFS_KEY);
-    if (!raw) return DEFAULT_USER_PREFERENCES;
-    return { ...DEFAULT_USER_PREFERENCES, ...(JSON.parse(raw) as Partial<UserPreferences>) };
+    if (!raw) return baseDefaults;
+    return { ...baseDefaults, ...(JSON.parse(raw) as Partial<UserPreferences>) };
   } catch {
-    return DEFAULT_USER_PREFERENCES;
+    return baseDefaults;
   }
 }
 
@@ -112,6 +128,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [allSavedProfiles, setAllSavedProfiles] = useState<SavedProfile[]>(() => loadSavedProfiles());
   const [preferences, setPreferences] = useState<UserPreferences>(() => loadStoredPreferences());
   const [brandOverride, setBrandOverride] = useState<Partial<BrandConfig>>(() => loadBrandOverride());
+  const [locale, setLocaleState] = useState<Locale>(() => getInitialLocale());
   const [isInitializing, setIsInitializing] = useState<boolean>(true);
 
   const isEnvServerLocked = Boolean(envServerUrl);
@@ -149,7 +166,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setServerInfo(info);
         localStorage.setItem(STORAGE_SERVER_KEY, targetUrl);
 
-        // Verificar si la sesión guardada sigue activa
+        // Verify that the saved session token is still valid
         const savedToken = localStorage.getItem(STORAGE_TOKEN_KEY);
         const savedUser = loadStoredUser();
         if (savedToken && savedUser) {
@@ -161,7 +178,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             localStorage.setItem(STORAGE_USER_KEY, JSON.stringify(refreshedUser));
             upsertSavedProfile(targetUrl, refreshedUser, savedToken);
           } catch {
-            // Token expirado o inválido -> mantener servidor conectado, limpiar usuario
+            // Token expired or invalid: keep server connected and clear user session
             if (!active) return;
             localStorage.removeItem(STORAGE_TOKEN_KEY);
             localStorage.removeItem(STORAGE_USER_KEY);
@@ -170,7 +187,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
       } catch {
-        // Si la URL preconfigurada por entorno falla en primer arranque, conservar la URL pero permitir diagnóstico
+        // Keep environment-configured server URL on initial boot errors so diagnostics remain possible
         if (active && !envServerUrl) {
           localStorage.removeItem(STORAGE_SERVER_KEY);
           setServerUrl('');
@@ -189,7 +206,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const connectToServer = useCallback(async (rawUrl: string): Promise<PublicSystemInfo> => {
     const normalized = normalizeServerUrl(rawUrl);
     if (!normalized) {
-      throw new Error('Introduce una dirección URL válida del servidor Jellyfin.');
+      throw new Error('Please enter a valid Jellyfin server URL.');
     }
     const info = await jellyfinApi.getPublicSystemInfo(normalized);
     setServerUrl(normalized);
@@ -208,7 +225,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setServerInfo(info);
     localStorage.setItem(STORAGE_SERVER_KEY, DEMO_SERVER_URL);
 
-    // Entrar al selector de perfiles en modo demo
+    // Open profile selector in demo mode
     localStorage.removeItem(STORAGE_TOKEN_KEY);
     localStorage.removeItem(STORAGE_USER_KEY);
     setUser(null);
@@ -218,7 +235,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loginWithCredentials = useCallback(
     async (username: string, password: string) => {
       if (!serverUrl) {
-        throw new Error('No hay ningún servidor Jellyfin conectado.');
+        throw new Error('No Jellyfin server is connected.');
       }
       const auth = await jellyfinApi.authenticateByName(serverUrl, username, password);
       const token = isDemoServer(serverUrl) ? DEMO_ACCESS_TOKEN : auth.AccessToken;
@@ -252,7 +269,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         upsertSavedProfile(serverUrl, refreshedUser, entry.accessToken);
         return true;
       } catch {
-        // Token expirado o revocado: conservar perfil en la lista sin token para pedir contraseña
+        // Token expired or revoked: keep profile card without token so password can be prompted
         setAllSavedProfiles((prev) => {
           const next = prev.map((p) =>
             p.serverUrl === serverUrl && p.user.Id === userId ? { ...p, accessToken: '' } : p
@@ -318,6 +335,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setBrandOverride({});
   }, []);
 
+  const setLocale = useCallback((next: Locale) => {
+    setLocaleState(next);
+    try {
+      localStorage.setItem(STORAGE_LOCALE_KEY, next);
+    } catch {
+      // Ignore storage access errors
+    }
+  }, []);
+
   const brand = useMemo<BrandConfig>(() => {
     const customName = brandOverride.appName?.trim();
     const customLogo =
@@ -335,7 +361,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [brandOverride, envBrand]);
 
-  // Sincronizar título de la pestaña y favicon con la marca activa
+  // Keep document title and favicon synchronized with active branding
   useEffect(() => {
     document.title = brand.appName;
     const iconLink = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
@@ -344,7 +370,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [brand.appName, brand.logoUrl]);
 
+  // Keep <html lang="..."> synchronized with the selected UI locale
+  useEffect(() => {
+    document.documentElement.lang = locale;
+  }, [locale]);
+
   const savedProfiles = allSavedProfiles.filter((entry) => entry.serverUrl === serverUrl);
+  const t = translations[locale];
 
   return (
     <AuthContext.Provider
@@ -361,6 +393,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         preferences,
         brand,
         brandOverride,
+        locale,
+        t,
         connectToServer,
         enableDemoMode,
         loginWithCredentials,
@@ -371,6 +405,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updatePreferences,
         updateBrand,
         resetBrand,
+        setLocale,
       }}
     >
       {children}
@@ -381,7 +416,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
   if (!ctx) {
-    throw new Error('useAuth debe utilizarse dentro de AuthProvider.');
+    throw new Error('useAuth must be used within AuthProvider.');
   }
   return ctx;
 }
