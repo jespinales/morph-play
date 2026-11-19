@@ -38,6 +38,8 @@ export const HomePage: React.FC<HomePageProps> = ({
     topRated,
     favorites,
     suggestions,
+    recommendations,
+    upcomingEpisodes,
     actionMovies,
     refreshResumeAndNextUp,
     handleRemoveFromResume,
@@ -140,6 +142,33 @@ export const HomePage: React.FC<HomePageProps> = ({
           <MediaRow
             title={t.home.recommendedForYou}
             items={hydrate(suggestions)}
+            onPlay={onPlay}
+            onOpenDetail={onOpenDetail}
+            onToggleFavorite={onToggleFavorite}
+          />
+        )}
+
+        {recommendations.map((rec, idx) =>
+          rec.Items && rec.Items.length > 0 ? (
+            <MediaRow
+              key={`${rec.CategoryId ?? rec.BaselineItemName ?? idx}`}
+              title={
+                rec.BaselineItemName
+                  ? t.home.becauseYouWatched(rec.BaselineItemName)
+                  : t.home.recommendedForYou
+              }
+              items={hydrate(rec.Items)}
+              onPlay={onPlay}
+              onOpenDetail={onOpenDetail}
+              onToggleFavorite={onToggleFavorite}
+            />
+          ) : null
+        )}
+
+        {upcomingEpisodes.length > 0 && (
+          <MediaRow
+            title={t.home.upcomingEpisodes}
+            items={hydrate(upcomingEpisodes)}
             onPlay={onPlay}
             onOpenDetail={onOpenDetail}
             onToggleFavorite={onToggleFavorite}

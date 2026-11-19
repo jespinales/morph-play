@@ -79,7 +79,7 @@ export function getTrickplayFrame(
 
   const query = new URLSearchParams({
     mediaSourceId,
-    ApiKey: token,
+    api_key: token,
   });
 
   return {

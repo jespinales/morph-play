@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { jellyfinApi } from '../../../shared/api/jellyfin';
-import { BaseItemDto } from '../../../shared/types/jellyfin';
+import { BaseItemDto, RecommendationDto } from '../../../shared/types/jellyfin';
 
 interface UseHomeCatalogParams {
   serverUrl: string;
@@ -24,6 +24,8 @@ export function useHomeCatalog({
   const [topRated, setTopRated] = useState<BaseItemDto[]>([]);
   const [favorites, setFavorites] = useState<BaseItemDto[]>([]);
   const [suggestions, setSuggestions] = useState<BaseItemDto[]>([]);
+  const [recommendations, setRecommendations] = useState<RecommendationDto[]>([]);
+  const [upcomingEpisodes, setUpcomingEpisodes] = useState<BaseItemDto[]>([]);
   const [actionMovies, setActionMovies] = useState<BaseItemDto[]>([]);
   const loadedContextRef = useRef<string | null>(null);
   const isMountedRef = useRef(true);
@@ -57,7 +59,18 @@ export function useHomeCatalog({
       }
 
       try {
-        const [resume, nextUp, movies, series, top, favs, suggested, actionPrimary] = await Promise.all([
+        const [
+          resume,
+          nextUp,
+          movies,
+          series,
+          top,
+          favs,
+          suggested,
+          movieRecs,
+          upcoming,
+          actionPrimary,
+        ] = await Promise.all([
           jellyfinApi.getResumeItems(serverUrl, accessToken, userId).catch(() => []),
           jellyfinApi.getNextUpItems(serverUrl, accessToken, userId).catch(() => []),
           jellyfinApi.getLatestItems(serverUrl, accessToken, userId, 'Movie', 16).catch(() => []),
@@ -80,6 +93,8 @@ export function useHomeCatalog({
             .then((r) => r.Items)
             .catch(() => []),
           jellyfinApi.getSuggestions(serverUrl, accessToken, userId, 16).catch(() => []),
+          jellyfinApi.getMovieRecommendations(serverUrl, accessToken, userId, 3, 12).catch(() => []),
+          jellyfinApi.getUpcomingEpisodes(serverUrl, accessToken, userId, 16).catch(() => []),
           jellyfinApi
             .getItems(serverUrl, accessToken, userId, {
               includeItemTypes: 'Movie',
@@ -120,6 +135,8 @@ export function useHomeCatalog({
         setTopRated(top);
         setFavorites(favs);
         setSuggestions(suggested);
+        setRecommendations(movieRecs);
+        setUpcomingEpisodes(upcoming);
         setActionMovies(action);
         loadedContextRef.current = contextKey;
       } finally {
@@ -187,6 +204,8 @@ export function useHomeCatalog({
     topRated,
     favorites,
     suggestions,
+    recommendations,
+    upcomingEpisodes,
     actionMovies,
     refreshResumeAndNextUp,
     handleRemoveFromResume,

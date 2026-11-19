@@ -132,6 +132,7 @@ export interface UserItemDataDto {
   PlaybackPositionTicks?: number;
   PlayCount?: number;
   IsFavorite?: boolean;
+  Likes?: boolean;
   Played?: boolean;
   PlayedPercentage?: number;
   UnplayedItemCount?: number;
@@ -233,6 +234,8 @@ export interface BaseItemDto {
   DateCreated?: string;
   PlaylistItemId?: string;
   RemoteTrailers?: RemoteTrailerDto[];
+  CanDownload?: boolean;
+  ExternalUrls?: Array<{ Name?: string; Url?: string }>;
 }
 
 export interface SearchHintDto {
@@ -324,3 +327,100 @@ export const DEFAULT_USER_PREFERENCES: UserPreferences = {
   preferredAudioLang: 'eng',
   preferredSubtitleLang: 'eng',
 };
+
+export interface RemoteSubtitleInfo {
+  ThreeLetterISOLanguageName?: string;
+  Id?: string;
+  ProviderName?: string;
+  Name?: string;
+  Format?: string;
+  Author?: string;
+  Comment?: string;
+  DateCreated?: string;
+  CommunityRating?: number;
+  FrameRate?: number;
+  DownloadCount?: number;
+  IsHashMatch?: boolean;
+  AiTranslated?: boolean;
+  MachineTranslated?: boolean;
+  Forced?: boolean;
+  HearingImpaired?: boolean;
+}
+
+export interface UploadSubtitleDto {
+  Language: string;
+  Format: string;
+  IsForced: boolean;
+  IsHearingImpaired?: boolean;
+  Data: string;
+}
+
+export interface QueryFilters {
+  Genres?: string[];
+  Tags?: string[];
+  AudioLanguages?: string[];
+  SubtitleLanguages?: string[];
+}
+
+export interface RecommendationDto {
+  Items?: BaseItemDto[];
+  RecommendationType?: string;
+  BaselineItemName?: string;
+  CategoryId?: string;
+}
+
+export interface ExternalIdInfo {
+  Name?: string;
+  Key?: string;
+  Type?: string;
+}
+
+export interface PlaylistUserPermissions {
+  UserId: string;
+  CanEdit: boolean;
+}
+
+export interface PlaylistDto {
+  OpenAccess?: boolean;
+  Shares?: PlaylistUserPermissions[];
+  ItemIds?: string[];
+}
+
+export interface DisplayPreferencesDto {
+  Id?: string;
+  ViewType?: string;
+  SortBy?: string;
+  IndexBy?: string;
+  RememberIndexing?: boolean;
+  PrimaryImageHeight?: number;
+  PrimaryImageWidth?: number;
+  CustomPrefs?: Record<string, string | null>;
+  ScrollDirection?: string;
+  ShowBackdrop?: boolean;
+  RememberSorting?: boolean;
+  SortOrder?: 'Ascending' | 'Descending' | string;
+  ShowSidebar?: boolean;
+  Client?: string;
+}
+
+export interface BrandingOptionsDto {
+  LoginDisclaimer?: string;
+  CustomCss?: string;
+  SplashscreenEnabled?: boolean;
+}
+
+export interface ThemeMediaResult {
+  Items?: BaseItemDto[];
+  TotalRecordCount?: number;
+  OwnerId?: string;
+}
+
+export interface AllThemeMediaResult {
+  ThemeVideosResult?: ThemeMediaResult;
+  ThemeSongsResult?: ThemeMediaResult;
+  SoundtrackSongsResult?: ThemeMediaResult;
+}
+
+export type GroupQueueMode = 'Queue' | 'QueueNext';
+export type GroupRepeatMode = 'RepeatOne' | 'RepeatAll' | 'RepeatNone';
+export type GroupShuffleMode = 'Sorted' | 'Shuffle';

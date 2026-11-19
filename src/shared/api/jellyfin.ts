@@ -27,6 +27,7 @@ import {
 } from './demo/demoData';
 import {
   applyDemoOverrides,
+  demoCollections,
   demoFavoriteOverrides,
   demoPlayedOverrides,
   demoPlaylists,
@@ -34,6 +35,7 @@ import {
   demoRemovedNextUp,
   isDemoServer,
 } from './demo/demoStore';
+import { jellyfinExtendedApi } from './jellyfinExtended';
 
 function parseLastPlayedTimestamp(item: BaseItemDto): number {
   const raw = item.UserData?.LastPlayedDate;
@@ -128,7 +130,6 @@ export const jellyfinApi = {
     }
     return apiRequest<QuickConnectResult>(serverUrl, '/QuickConnect/Initiate', {
       method: 'POST',
-      body: {},
     });
   },
 
@@ -176,7 +177,8 @@ export const jellyfinApi = {
     config: UserConfiguration
   ): Promise<void> {
     if (isDemoServer(serverUrl)) return;
-    await apiRequest(serverUrl, `/Users/${userId}/Configuration`, {
+    const query = userId ? `?userId=${encodeURIComponent(userId)}` : '';
+    await apiRequest(serverUrl, `/Users/Configuration${query}`, {
       method: 'POST',
       token,
       body: config,
@@ -198,7 +200,11 @@ export const jellyfinApi = {
         { Id: 'view-boxsets', Name: 'Collections', Type: 'CollectionFolder', CollectionType: 'boxsets' },
       ];
     }
-    const res = await apiRequest<ItemsResult>(serverUrl, `/Users/${userId}/Views`, { token });
+    const res = await apiRequest<ItemsResult>(
+      serverUrl,
+      `/UserViews?userId=${encodeURIComponent(userId)}`,
+      { token }
+    );
     return res.Items ?? [];
   },
 
@@ -211,16 +217,17 @@ export const jellyfinApi = {
       );
     }
     const query = new URLSearchParams({
-      Limit: '32',
-      Recursive: 'true',
-      Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,MediaSources,Overview,Genres,DateCreated',
-      ImageTypeLimit: '1',
-      EnableImageTypes: 'Primary,Backdrop,Thumb,Logo',
-      MediaTypes: 'Video',
+      userId,
+      limit: '32',
+      recursive: 'true',
+      fields: 'PrimaryImageAspectRatio,MediaSources,Overview,Genres,DateCreated',
+      imageTypeLimit: '1',
+      enableImageTypes: 'Primary,Backdrop,Thumb,Logo',
+      mediaTypes: 'Video',
     });
     const res = await apiRequest<ItemsResult>(
       serverUrl,
-      `/Users/${userId}/Items/Resume?${query.toString()}`,
+      `/UserItems/Resume?${query.toString()}`,
       { token }
     );
     return dedupeResumeItemsBySeries(res.Items ?? [], 16);
@@ -233,11 +240,11 @@ export const jellyfinApi = {
         .map(applyDemoOverrides);
     }
     const query = new URLSearchParams({
-      UserId: userId,
-      Limit: '16',
-      Fields: 'PrimaryImageAspectRatio,Overview,MediaSources,Genres',
-      ImageTypeLimit: '1',
-      EnableImageTypes: 'Primary,Backdrop,Thumb,Logo',
+      userId,
+      limit: '16',
+      fields: 'PrimaryImageAspectRatio,Overview,MediaSources,Genres',
+      imageTypeLimit: '1',
+      enableImageTypes: 'Primary,Backdrop,Thumb,Logo',
     });
     const res = await apiRequest<ItemsResult>(serverUrl, `/Shows/NextUp?${query.toString()}`, {
       token,
@@ -260,16 +267,16 @@ export const jellyfinApi = {
         .map(applyDemoOverrides);
     }
     const query = new URLSearchParams({
-      Limit: String(limit),
-      Fields:
-        'PrimaryImageAspectRatio,Overview,Genres,CommunityRating,OfficialRating,ProductionYear,DateCreated',
-      ImageTypeLimit: '1',
-      EnableImageTypes: 'Primary,Backdrop,Thumb,Logo',
+      userId,
+      limit: String(limit),
+      fields: 'PrimaryImageAspectRatio,Overview,Genres,DateCreated',
+      imageTypeLimit: '1',
+      enableImageTypes: 'Primary,Backdrop,Thumb,Logo',
     });
     if (includeItemTypes) {
-      query.set('IncludeItemTypes', includeItemTypes);
+      query.set('includeItemTypes', includeItemTypes);
     }
-    return apiRequest<BaseItemDto[]>(serverUrl, `/Users/${userId}/Items/Latest?${query.toString()}`, {
+    return apiRequest<BaseItemDto[]>(serverUrl, `/Items/Latest?${query.toString()}`, {
       token,
     });
   },
@@ -284,6 +291,8 @@ export const jellyfinApi = {
       sortOrder?: 'Ascending' | 'Descending';
       filters?: string;
       genres?: string;
+      tags?: string;
+      years?: number;
       searchTerm?: string;
       limit?: number;
       startIndex?: number;
@@ -292,7 +301,17 @@ export const jellyfinApi = {
     } = {}
   ): Promise<ItemsResult> {
     if (isDemoServer(serverUrl)) {
-      let pool = [...DEMO_ITEMS, ...DEMO_EPISODES];
+      if (params.parentId && demoCollections.has(params.parentId)) {
+        const col = demoCollections.get(params.parentId)!;
+        const poolMap = new Map([...DEMO_ITEMS, ...DEMO_EPISODES].map((i) => [i.Id, i]));
+        const colItems = col.itemIds
+          .map((id) => poolMap.get(id))
+          .filter((x): x is BaseItemDto => Boolean(x))
+          .map(applyDemoOverrides);
+        return { Items: colItems, TotalRecordCount: colItems.length, StartIndex: 0 };
+      }
+
+      let pool = [...DEMO_ITEMS, ...DEMO_EPISODES, ...jellyfinExtendedApi.getCollectionItemsDemoPool()];
       if (params.includeItemTypes) {
         const types = params.includeItemTypes.split(',');
         pool = pool.filter((item) => types.includes(item.Type));
@@ -309,6 +328,10 @@ export const jellyfinApi = {
       if (params.genres) {
         const g = params.genres.toLowerCase();
         pool = pool.filter((item) => item.Genres?.some((x) => x.toLowerCase() === g));
+      }
+
+      if (params.years) {
+        pool = pool.filter((item) => item.ProductionYear === params.years);
       }
 
       if (params.personIds) {
@@ -344,25 +367,28 @@ export const jellyfinApi = {
     }
 
     const query = new URLSearchParams({
-      Recursive: 'true',
-      Fields:
-        'PrimaryImageAspectRatio,Overview,Genres,People,MediaStreams,MediaSources,CommunityRating,OfficialRating,ProductionYear,Taglines,DateCreated',
-      ImageTypeLimit: '1',
-      EnableImageTypes: 'Primary,Backdrop,Thumb,Logo',
-      Limit: String(params.limit ?? 50),
-      StartIndex: String(params.startIndex ?? 0),
+      userId,
+      recursive: 'true',
+      fields:
+        'PrimaryImageAspectRatio,Overview,Genres,People,MediaStreams,MediaSources,Taglines,DateCreated',
+      imageTypeLimit: '1',
+      enableImageTypes: 'Primary,Backdrop,Thumb,Logo',
+      limit: String(params.limit ?? 50),
+      startIndex: String(params.startIndex ?? 0),
     });
 
-    if (params.includeItemTypes) query.set('IncludeItemTypes', params.includeItemTypes);
-    if (params.sortBy) query.set('SortBy', params.sortBy);
-    if (params.sortOrder) query.set('SortOrder', params.sortOrder);
-    if (params.filters) query.set('Filters', params.filters);
-    if (params.genres) query.set('Genres', params.genres);
-    if (params.searchTerm) query.set('SearchTerm', params.searchTerm);
-    if (params.parentId) query.set('ParentId', params.parentId);
-    if (params.personIds) query.set('PersonIds', params.personIds);
+    if (params.includeItemTypes) query.set('includeItemTypes', params.includeItemTypes);
+    if (params.sortBy) query.set('sortBy', params.sortBy);
+    if (params.sortOrder) query.set('sortOrder', params.sortOrder);
+    if (params.filters) query.set('filters', params.filters);
+    if (params.genres) query.set('genres', params.genres);
+    if (params.tags) query.set('tags', params.tags);
+    if (params.years) query.set('years', String(params.years));
+    if (params.searchTerm) query.set('searchTerm', params.searchTerm);
+    if (params.parentId) query.set('parentId', params.parentId);
+    if (params.personIds) query.set('personIds', params.personIds);
 
-    return apiRequest<ItemsResult>(serverUrl, `/Users/${userId}/Items?${query.toString()}`, {
+    return apiRequest<ItemsResult>(serverUrl, `/Items?${query.toString()}`, {
       token,
     });
   },
@@ -381,9 +407,9 @@ export const jellyfinApi = {
       );
       return Array.from(set).sort();
     }
-    const query = new URLSearchParams({ UserId: userId });
-    if (params.includeItemTypes) query.set('IncludeItemTypes', params.includeItemTypes);
-    if (params.parentId) query.set('ParentId', params.parentId);
+    const query = new URLSearchParams({ userId });
+    if (params.includeItemTypes) query.set('includeItemTypes', params.includeItemTypes);
+    if (params.parentId) query.set('parentId', params.parentId);
     const res = await apiRequest<ItemsResult>(serverUrl, `/Genres?${query.toString()}`, { token });
     return (res.Items ?? []).map((g) => g.Name).filter(Boolean);
   },
@@ -410,7 +436,11 @@ export const jellyfinApi = {
       }
       return applyDemoOverrides(DEMO_ITEMS[0]);
     }
-    return apiRequest<BaseItemDto>(serverUrl, `/Users/${userId}/Items/${itemId}`, { token });
+    return apiRequest<BaseItemDto>(
+      serverUrl,
+      `/Items/${encodeURIComponent(itemId)}?userId=${encodeURIComponent(userId)}`,
+      { token }
+    );
   },
 
   async getLocalTrailers(
@@ -423,7 +453,7 @@ export const jellyfinApi = {
     try {
       return await apiRequest<BaseItemDto[]>(
         serverUrl,
-        `/Users/${userId}/Items/${itemId}/LocalTrailers`,
+        `/Items/${encodeURIComponent(itemId)}/LocalTrailers?userId=${encodeURIComponent(userId)}`,
         { token, timeoutMs: 6000 }
       );
     } catch {
@@ -441,7 +471,7 @@ export const jellyfinApi = {
     try {
       return await apiRequest<BaseItemDto[]>(
         serverUrl,
-        `/Users/${userId}/Items/${itemId}/SpecialFeatures`,
+        `/Items/${encodeURIComponent(itemId)}/SpecialFeatures?userId=${encodeURIComponent(userId)}`,
         { token, timeoutMs: 6000 }
       );
     } catch {
@@ -470,7 +500,7 @@ export const jellyfinApi = {
     }
     const query = new URLSearchParams({
       userId,
-      Fields: 'ItemCounts,PrimaryImageAspectRatio,Overview',
+      fields: 'ItemCounts,PrimaryImageAspectRatio,Overview',
     });
     const res = await apiRequest<ItemsResult>(
       serverUrl,
@@ -511,7 +541,7 @@ export const jellyfinApi = {
 
     const query = new URLSearchParams({
       userId,
-      Fields: 'Overview,MediaSources,MediaStreams,PrimaryImageAspectRatio',
+      fields: 'Overview,MediaSources,MediaStreams,PrimaryImageAspectRatio,Chapters',
     });
     if (seasonId) query.set('seasonId', seasonId);
     const res = await apiRequest<ItemsResult>(
@@ -539,7 +569,7 @@ export const jellyfinApi = {
     const query = new URLSearchParams({
       userId,
       limit: String(limit),
-      Fields: 'PrimaryImageAspectRatio,Overview,ProductionYear,CommunityRating,OfficialRating',
+      fields: 'PrimaryImageAspectRatio,Overview',
     });
     const res = await apiRequest<ItemsResult>(
       serverUrl,
@@ -560,10 +590,14 @@ export const jellyfinApi = {
       demoFavoriteOverrides.set(itemId, makeFavorite);
       return;
     }
-    await apiRequest(serverUrl, `/Users/${userId}/FavoriteItems/${itemId}`, {
-      method: makeFavorite ? 'POST' : 'DELETE',
-      token,
-    });
+    await apiRequest(
+      serverUrl,
+      `/UserFavoriteItems/${encodeURIComponent(itemId)}?userId=${encodeURIComponent(userId)}`,
+      {
+        method: makeFavorite ? 'POST' : 'DELETE',
+        token,
+      }
+    );
   },
 
   async togglePlayed(
@@ -578,10 +612,14 @@ export const jellyfinApi = {
       if (markPlayed) demoProgressOverrides.set(itemId, 0);
       return;
     }
-    await apiRequest(serverUrl, `/Users/${userId}/PlayedItems/${itemId}`, {
-      method: markPlayed ? 'POST' : 'DELETE',
-      token,
-    });
+    await apiRequest(
+      serverUrl,
+      `/UserPlayedItems/${encodeURIComponent(itemId)}?userId=${encodeURIComponent(userId)}`,
+      {
+        method: markPlayed ? 'POST' : 'DELETE',
+        token,
+      }
+    );
   },
 
   async removeFromResume(
@@ -654,6 +692,8 @@ export const jellyfinApi = {
       audioStreamIndex?: number;
       subtitleStreamIndex?: number;
       startTimeTicks?: number;
+      mediaSourceId?: string;
+      alwaysBurnInSubtitleWhenTranscoding?: boolean;
     } = {}
   ): Promise<PlaybackInfoResponse> {
     if (isDemoServer(serverUrl)) {
@@ -666,6 +706,8 @@ export const jellyfinApi = {
       StartTimeTicks: options.startTimeTicks ?? 0,
       AudioStreamIndex: options.audioStreamIndex,
       SubtitleStreamIndex: options.subtitleStreamIndex,
+      MediaSourceId: options.mediaSourceId,
+      AlwaysBurnInSubtitleWhenTranscoding: options.alwaysBurnInSubtitleWhenTranscoding,
       EnableDirectPlay: true,
       EnableDirectStream: true,
       EnableTranscoding: true,
@@ -694,19 +736,26 @@ export const jellyfinApi = {
             Context: 'Streaming',
             MaxAudioChannels: '2',
             MinSegments: 1,
-            BreakOnNonKeyFrames: true,
           },
         ],
         SubtitleProfiles: [
           { Format: 'vtt', Method: 'External' },
           { Format: 'srt', Method: 'External' },
+          { Format: 'ass', Method: 'Encode' },
+          { Format: 'ssa', Method: 'Encode' },
+          { Format: 'pgssub', Method: 'Encode' },
+          { Format: 'pgs', Method: 'Encode' },
+          { Format: 'dvdsub', Method: 'Encode' },
+          { Format: 'dvbsub', Method: 'Encode' },
+          { Format: 'vobsub', Method: 'Encode' },
+          { Format: 'sub', Method: 'Encode' },
         ],
       },
     };
 
     return apiRequest<PlaybackInfoResponse>(
       serverUrl,
-      `/Items/${itemId}/PlaybackInfo?UserId=${encodeURIComponent(userId)}`,
+      `/Items/${encodeURIComponent(itemId)}/PlaybackInfo`,
       {
         method: 'POST',
         token,
@@ -861,7 +910,7 @@ export const jellyfinApi = {
       const currentDeviceId = getOrCreateDeviceId();
       const sessions = await apiRequest<SessionInfoDto[]>(
         serverUrl,
-        `/Sessions?ControllableByUserId=${encodeURIComponent(userId)}`,
+        `/Sessions?controllableByUserId=${encodeURIComponent(userId)}`,
         { token, timeoutMs: 6000 }
       );
       return (sessions ?? []).filter(
@@ -881,9 +930,9 @@ export const jellyfinApi = {
   ): Promise<void> {
     if (isDemoServer(serverUrl) || itemIds.length === 0) return;
     const query = new URLSearchParams({
-      PlayCommand: 'PlayNow',
-      ItemIds: itemIds.join(','),
-      StartPositionTicks: String(Math.max(0, Math.round(startPositionTicks))),
+      playCommand: 'PlayNow',
+      itemIds: itemIds.join(','),
+      startPositionTicks: String(Math.max(0, Math.round(startPositionTicks))),
     });
     await apiRequest(
       serverUrl,
@@ -905,12 +954,14 @@ export const jellyfinApi = {
           SupportedCommands: [
             'Play',
             'PlayState',
-            'Pause',
-            'Unpause',
-            'PlayPause',
-            'Seek',
-            'Stop',
             'PlayNext',
+            'SetAudioStreamIndex',
+            'SetSubtitleStreamIndex',
+            'SetVolume',
+            'Mute',
+            'Unmute',
+            'ToggleMute',
+            'ToggleFullscreen',
             'DisplayMessage',
           ],
           SupportsPersistentIdentifier: true,
@@ -936,9 +987,8 @@ export const jellyfinApi = {
     const query = new URLSearchParams({
       userId,
       type: 'Movie,Series',
-      mediaTypes: 'Video',
+      mediaType: 'Video',
       limit: String(limit),
-      enableUserData: 'true',
     });
     try {
       const res = await apiRequest<ItemsResult>(
@@ -1033,7 +1083,7 @@ export const jellyfinApi = {
     }
     const query = new URLSearchParams({
       userId,
-      Fields: 'PrimaryImageAspectRatio,Overview,MediaSources,RunTimeTicks,ProductionYear',
+      fields: 'PrimaryImageAspectRatio,Overview,MediaSources',
     });
     const res = await apiRequest<ItemsResult>(
       serverUrl,
@@ -1096,7 +1146,6 @@ export const jellyfinApi = {
   async removeFromPlaylist(
     serverUrl: string,
     token: string,
-    userId: string,
     playlistId: string,
     entryIds: string[]
   ): Promise<void> {
@@ -1110,7 +1159,6 @@ export const jellyfinApi = {
     }
     const query = new URLSearchParams({
       entryIds: entryIds.join(','),
-      userId,
     });
     await apiRequest(
       serverUrl,
@@ -1131,13 +1179,21 @@ export const jellyfinApi = {
     }
   },
 
-  async createSyncPlayGroup(serverUrl: string, token: string, groupName: string): Promise<void> {
-    if (isDemoServer(serverUrl)) return;
-    await apiRequest(serverUrl, '/SyncPlay/New', {
-      method: 'POST',
-      token,
-      body: { GroupName: groupName.trim() || 'MorphPlay Watch Party' },
-    });
+  async createSyncPlayGroup(
+    serverUrl: string,
+    token: string,
+    groupName: string
+  ): Promise<SyncPlayGroupDto | null> {
+    if (isDemoServer(serverUrl)) return null;
+    try {
+      return await apiRequest<SyncPlayGroupDto>(serverUrl, '/SyncPlay/New', {
+        method: 'POST',
+        token,
+        body: { GroupName: groupName.trim() || 'MorphPlay Watch Party' },
+      });
+    } catch {
+      return null;
+    }
   },
 
   async joinSyncPlayGroup(serverUrl: string, token: string, groupId: string): Promise<void> {
@@ -1230,4 +1286,6 @@ export const jellyfinApi = {
       body: payload,
     });
   },
+
+  ...jellyfinExtendedApi,
 };

@@ -81,7 +81,11 @@ export function getUserAvatarUrl(serverUrl: string, user: UserDto): string | nul
     return getDemoImageUrl(user.Id, 'User', user.Name);
   }
   if (!user.PrimaryImageTag) return null;
-  return `${normalizeServerUrl(serverUrl)}/Users/${user.Id}/Images/Primary?quality=90&maxWidth=300&tag=${user.PrimaryImageTag}`;
+  const query = new URLSearchParams({
+    userId: user.Id,
+    tag: user.PrimaryImageTag,
+  });
+  return `${normalizeServerUrl(serverUrl)}/UserImage?${query.toString()}`;
 }
 
 export function getPersonImageUrl(
@@ -107,6 +111,33 @@ export function getChapterImageUrl(
   const base = normalizeServerUrl(serverUrl);
   if (!base) return null;
   return `${base}/Items/${itemId}/Images/Chapter/${chapterIndex}?maxWidth=${maxWidth}&quality=85&tag=${encodeURIComponent(imageTag)}`;
+}
+
+export function getItemDownloadUrl(serverUrl: string, itemId: string, token: string): string | null {
+  if (isDemoServer(serverUrl) || !token) return null;
+  const base = normalizeServerUrl(serverUrl);
+  if (!base) return null;
+  return `${base}/Items/${encodeURIComponent(itemId)}/Download?api_key=${encodeURIComponent(token)}`;
+}
+
+export function getThemeAudioUrl(serverUrl: string, itemId: string, token: string): string | null {
+  if (isDemoServer(serverUrl) || !token) return null;
+  const base = normalizeServerUrl(serverUrl);
+  if (!base) return null;
+  return `${base}/Audio/${encodeURIComponent(itemId)}/stream?static=true&api_key=${encodeURIComponent(token)}`;
+}
+
+export function getAttachmentUrl(
+  serverUrl: string,
+  videoId: string,
+  mediaSourceId: string,
+  attachmentIndex: number,
+  token: string
+): string | null {
+  if (isDemoServer(serverUrl) || !token) return null;
+  const base = normalizeServerUrl(serverUrl);
+  if (!base) return null;
+  return `${base}/Videos/${encodeURIComponent(videoId)}/${encodeURIComponent(mediaSourceId)}/Attachments/${attachmentIndex}?api_key=${encodeURIComponent(token)}`;
 }
 
 export function qualityToBitrate(quality: StreamingQuality): number {
@@ -222,13 +253,25 @@ export function buildPlaybackStream(
 
   if (canDirectPlay) {
     return {
-      streamUrl: `${base}/Videos/${itemId}/stream?Static=true&mediaSourceId=${encodeURIComponent(mediaSource.Id)}&api_key=${encodeURIComponent(token)}`,
+      streamUrl: `${base}/Videos/${itemId}/stream?static=true&mediaSourceId=${encodeURIComponent(mediaSource.Id)}&api_key=${encodeURIComponent(token)}`,
       isHls: false,
       playMethod: 'DirectPlay',
       allSubtitles,
       subtitleTracks,
     };
   }
+
+  const normalizedTranscodingUrl = mediaSource.TranscodingUrl
+    ? mediaSource.TranscodingUrl.startsWith('/')
+      ? `${base}${mediaSource.TranscodingUrl}`
+      : `${base}/${mediaSource.TranscodingUrl}`
+    : undefined;
+
+  const transcodingMatchesEncodedSub =
+    encodedSub !== undefined &&
+    Boolean(normalizedTranscodingUrl) &&
+    normalizedTranscodingUrl!.includes('SubtitleMethod=Encode') &&
+    normalizedTranscodingUrl!.includes(`SubtitleStreamIndex=${encodedSub.index}`);
 
   const hlsParams = new URLSearchParams({
     MediaSourceId: mediaSource.Id,
@@ -238,7 +281,6 @@ export function buildPlaybackStream(
     TranscodingMaxAudioChannels: '2',
     SegmentContainer: 'ts',
     MinSegments: '1',
-    BreakOnNonKeyFrames: 'True',
     VideoBitrate: String(maxBitrate),
   });
   if (playSessionId) hlsParams.set('PlaySessionId', playSessionId);
@@ -248,15 +290,15 @@ export function buildPlaybackStream(
     hlsParams.set('SubtitleMethod', 'Encode');
   }
 
-  // Build explicit master.m3u8 URL when burning graphical subtitles so FFmpeg encodes them
+  // Prefer server-negotiated TranscodingUrl from PlaybackInfo when available
   const streamUrl =
-    !encodedSub && mediaSource.TranscodingUrl
-      ? `${base}${mediaSource.TranscodingUrl}`
+    normalizedTranscodingUrl && (!encodedSub || transcodingMatchesEncodedSub)
+      ? normalizedTranscodingUrl
       : `${base}/Videos/${itemId}/master.m3u8?${hlsParams.toString()}`;
 
   return {
     streamUrl,
-    fallbackUrl: `${base}/Videos/${itemId}/stream?Static=true&mediaSourceId=${encodeURIComponent(mediaSource.Id)}&api_key=${encodeURIComponent(token)}`,
+    fallbackUrl: `${base}/Videos/${itemId}/stream?static=true&mediaSourceId=${encodeURIComponent(mediaSource.Id)}&api_key=${encodeURIComponent(token)}`,
     isHls: true,
     playMethod: 'Transcode',
     encodedSubtitleIndex: encodedSub?.index,

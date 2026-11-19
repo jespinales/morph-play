@@ -16,8 +16,12 @@ import { BuiltPlaybackStream } from '../../../shared/api/playback';
 import {
   BaseItemDto,
   ChapterInfo,
+  GroupRepeatMode,
+  GroupShuffleMode,
   MediaSourceInfo,
   MediaStream,
+  PlaystateCommandData,
+  RemoteSubtitleInfo,
   SessionInfoDto,
   SyncPlayGroupDto,
 } from '../../../shared/types/jellyfin';
@@ -48,15 +52,24 @@ interface PlayerControlsProps {
   mediaSources: MediaSourceInfo[];
   selectedMediaSourceId: string | undefined;
   castSessions: SessionInfoDto[];
+  activeCastSession: SessionInfoDto | null;
+  castMessageInput: string;
   castStatusMessage: string | null;
   syncPlayGroups: SyncPlayGroupDto[];
   activeSyncPlayGroup: SyncPlayGroupDto | null;
   syncPlayGroupInput: string;
+  syncPlayRepeatMode: GroupRepeatMode;
+  syncPlayShuffleMode: GroupShuffleMode;
+  syncPlayIgnoreWait: boolean;
   nextEpisode: BaseItemDto | null;
   audioStreams: MediaStream[];
   selectedAudioIndex: number | undefined;
   builtStream: BuiltPlaybackStream | null;
   selectedSubtitleIndex: number;
+  deletableSubtitleIndices: number[];
+  remoteSubLang: string;
+  remoteSubResults: RemoteSubtitleInfo[];
+  remoteSubSearching: boolean;
   seekBarRef: React.RefObject<HTMLDivElement>;
   menusContainerRef: React.RefObject<HTMLDivElement>;
   seekPreview: { time: number; percent: number } | null;
@@ -77,12 +90,24 @@ interface PlayerControlsProps {
   onSelectChapter: (startSeconds: number) => void;
   onSelectMediaSource: (source: MediaSourceInfo) => void;
   onCastToSession: (session: SessionInfoDto) => void;
+  onRemotePlaystate: (command: NonNullable<PlaystateCommandData['Command']>) => void;
+  onCastMessageInputChange: (val: string) => void;
+  onSendCastMessage: (e: React.FormEvent) => void;
   onSyncPlayGroupInputChange: (value: string) => void;
   onCreateSyncPlayGroup: (e: React.FormEvent) => void;
   onJoinSyncPlayGroup: (group: SyncPlayGroupDto) => void;
   onLeaveSyncPlayGroup: () => void;
+  onSyncPlayRepeatChange: (mode: GroupRepeatMode) => void;
+  onSyncPlayShuffleToggle: () => void;
+  onSyncPlayIgnoreWaitToggle: () => void;
+  onSyncPlayQueueStep: (dir: 'next' | 'prev' | 'stop') => void;
   onSelectAudio: (audioIdx: number) => void;
   onSelectSubtitle: (subIdx: number) => void;
+  onRemoteSubLangChange: (lang: string) => void;
+  onSearchRemoteSubtitles: () => void;
+  onDownloadRemoteSubtitle: (subtitleId: string) => void;
+  onUploadSubtitleFile: (file: File) => void;
+  onDeleteSubtitle: (index: number) => void;
   onSelectPlaybackRate: (rate: number) => void;
   onToggleFullscreen: () => void;
 }
@@ -110,15 +135,24 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
   mediaSources,
   selectedMediaSourceId,
   castSessions,
+  activeCastSession,
+  castMessageInput,
   castStatusMessage,
   syncPlayGroups,
   activeSyncPlayGroup,
   syncPlayGroupInput,
+  syncPlayRepeatMode,
+  syncPlayShuffleMode,
+  syncPlayIgnoreWait,
   nextEpisode,
   audioStreams,
   selectedAudioIndex,
   builtStream,
   selectedSubtitleIndex,
+  deletableSubtitleIndices,
+  remoteSubLang,
+  remoteSubResults,
+  remoteSubSearching,
   seekBarRef,
   menusContainerRef,
   seekPreview,
@@ -139,12 +173,24 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
   onSelectChapter,
   onSelectMediaSource,
   onCastToSession,
+  onRemotePlaystate,
+  onCastMessageInputChange,
+  onSendCastMessage,
   onSyncPlayGroupInputChange,
   onCreateSyncPlayGroup,
   onJoinSyncPlayGroup,
   onLeaveSyncPlayGroup,
+  onSyncPlayRepeatChange,
+  onSyncPlayShuffleToggle,
+  onSyncPlayIgnoreWaitToggle,
+  onSyncPlayQueueStep,
   onSelectAudio,
   onSelectSubtitle,
+  onRemoteSubLangChange,
+  onSearchRemoteSubtitles,
+  onDownloadRemoteSubtitle,
+  onUploadSubtitleFile,
+  onDeleteSubtitle,
   onSelectPlaybackRate,
   onToggleFullscreen,
 }) => {
@@ -425,10 +471,24 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
               builtStream={builtStream}
               selectedSubtitleIndex={selectedSubtitleIndex}
               onSelectSubtitle={onSelectSubtitle}
+              deletableSubtitleIndices={deletableSubtitleIndices}
+              remoteSubLang={remoteSubLang}
+              onRemoteSubLangChange={onRemoteSubLangChange}
+              remoteSubResults={remoteSubResults}
+              remoteSubSearching={remoteSubSearching}
+              onSearchRemoteSubtitles={onSearchRemoteSubtitles}
+              onDownloadRemoteSubtitle={onDownloadRemoteSubtitle}
+              onUploadSubtitleFile={onUploadSubtitleFile}
+              onDeleteSubtitle={onDeleteSubtitle}
               playbackRate={playbackRate}
               onSelectPlaybackRate={onSelectPlaybackRate}
               castSessions={castSessions}
+              activeCastSession={activeCastSession}
               onCastToSession={onCastToSession}
+              onRemotePlaystate={onRemotePlaystate}
+              castMessageInput={castMessageInput}
+              onCastMessageInputChange={onCastMessageInputChange}
+              onSendCastMessage={onSendCastMessage}
               castStatusMessage={castStatusMessage}
               syncPlayGroups={syncPlayGroups}
               activeSyncPlayGroup={activeSyncPlayGroup}
@@ -437,6 +497,13 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
               onCreateSyncPlayGroup={onCreateSyncPlayGroup}
               onJoinSyncPlayGroup={onJoinSyncPlayGroup}
               onLeaveSyncPlayGroup={onLeaveSyncPlayGroup}
+              syncPlayRepeatMode={syncPlayRepeatMode}
+              syncPlayShuffleMode={syncPlayShuffleMode}
+              syncPlayIgnoreWait={syncPlayIgnoreWait}
+              onSyncPlayRepeatChange={onSyncPlayRepeatChange}
+              onSyncPlayShuffleToggle={onSyncPlayShuffleToggle}
+              onSyncPlayIgnoreWaitToggle={onSyncPlayIgnoreWaitToggle}
+              onSyncPlayQueueStep={onSyncPlayQueueStep}
             />
 
             <button

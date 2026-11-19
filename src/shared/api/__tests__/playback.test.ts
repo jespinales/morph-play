@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEMO_SERVER_URL } from '../demo/demoData';
-import { buildPlaybackStream, getChapterImageUrl } from '../playback';
+import { buildPlaybackStream, getChapterImageUrl, getUserAvatarUrl } from '../playback';
 import { MediaSourceInfo } from '../../types/jellyfin';
 
 describe('playback stream builder', () => {
@@ -35,11 +35,35 @@ describe('playback stream builder', () => {
     expect(stream.streamUrl).toContain('SubtitleMethod=Encode');
   });
 
-  it('builds chapter thumbnail URLs only when an image tag exists', () => {
+  it('uses server TranscodingUrl when encoded subtitle matches PlaybackInfo URL', () => {
+    const negotiatedSource: MediaSourceInfo = {
+      ...mp4Source,
+      TranscodingUrl:
+        '/Videos/item-1/main.m3u8?SubtitleStreamIndex=3&SubtitleMethod=Encode&PlaySessionId=sess-2',
+    };
+    const stream = buildPlaybackStream(
+      'https://jf.test',
+      'tok',
+      'item-1',
+      negotiatedSource,
+      'sess-2',
+      1,
+      'auto',
+      3
+    );
+    expect(stream.streamUrl).toBe(
+      'https://jf.test/Videos/item-1/main.m3u8?SubtitleStreamIndex=3&SubtitleMethod=Encode&PlaySessionId=sess-2'
+    );
+  });
+
+  it('builds chapter thumbnail URLs and 12.4.0 UserImage avatar URLs', () => {
     expect(getChapterImageUrl('https://jf.test', 'item-1', 2, 'tag-9')).toBe(
       'https://jf.test/Items/item-1/Images/Chapter/2?maxWidth=360&quality=85&tag=tag-9'
     );
     expect(getChapterImageUrl('https://jf.test', 'item-1', 2, undefined)).toBeNull();
     expect(getChapterImageUrl(DEMO_SERVER_URL, 'item-1', 2, 'tag-9')).toBeNull();
+    expect(getUserAvatarUrl('https://jf.test', { Id: 'u1', Name: 'Alice', PrimaryImageTag: 'ava1' })).toBe(
+      'https://jf.test/UserImage?userId=u1&tag=ava1'
+    );
   });
 });

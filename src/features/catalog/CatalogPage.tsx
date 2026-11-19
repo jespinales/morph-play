@@ -47,9 +47,13 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
   const [localSearch, setLocalSearch] = useState(urlQuery);
   const [sortBy, setSortBy] = useState('DateCreated');
   const [selectedGenre, setSelectedGenre] = useState('');
+  const [selectedTag, setSelectedTag] = useState('');
+  const [selectedYear, setSelectedYear] = useState<number | undefined>(undefined);
   const [selectedLibraryId, setSelectedLibraryId] = useState('');
   const [newPlaylistName, setNewPlaylistName] = useState('');
   const [creatingPlaylist, setCreatingPlaylist] = useState(false);
+  const [newCollectionName, setNewCollectionName] = useState('');
+  const [creatingCollection, setCreatingCollection] = useState(false);
   const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
 
   const sortOptions = useMemo(
@@ -70,8 +74,41 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
 
   useEffect(() => {
     setSelectedGenre('');
+    setSelectedTag('');
+    setSelectedYear(undefined);
     setSelectedLibraryId('');
   }, [mode]);
+
+  // Hydrate catalog sort preference from Jellyfin DisplayPreferences
+  useEffect(() => {
+    let active = true;
+    async function loadDisplayPrefs() {
+      if (!serverUrl || !accessToken || !user?.Id || mode === 'playlists') return;
+      const prefs = await jellyfinApi.getDisplayPreferences(
+        serverUrl,
+        accessToken,
+        `morphplay-${mode}`,
+        user.Id
+      );
+      if (active && prefs?.SortBy && sortOptions.some((s) => s.value === prefs.SortBy)) {
+        setSortBy(prefs.SortBy);
+      }
+    }
+    loadDisplayPrefs();
+    return () => {
+      active = false;
+    };
+  }, [mode, serverUrl, accessToken, user?.Id, sortOptions]);
+
+  const handleSortChange = (nextSortBy: string) => {
+    setSortBy(nextSortBy);
+    if (!serverUrl || !accessToken || !user?.Id || mode === 'playlists') return;
+    const cfg = sortOptions.find((s) => s.value === nextSortBy);
+    void jellyfinApi.updateDisplayPreferences(serverUrl, accessToken, `morphplay-${mode}`, user.Id, {
+      SortBy: nextSortBy,
+      SortOrder: cfg?.order ?? 'Descending',
+    });
+  };
 
   const {
     loading,
@@ -80,6 +117,8 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
     totalCount,
     hydratedItems,
     availableGenres,
+    availableTags,
+    availableYears,
     availableLibraries,
     loadMore,
     triggerReload,
@@ -88,6 +127,8 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
     sortBy: sortCfg.value,
     sortOrder: sortCfg.order,
     selectedGenre,
+    selectedTag,
+    selectedYear,
     selectedLibraryId,
     searchTerm: localSearch,
     locale,
@@ -150,6 +191,19 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
       triggerReload();
     } finally {
       setCreatingPlaylist(false);
+    }
+  };
+
+  const handleCreateCollection = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!serverUrl || !accessToken || !newCollectionName.trim()) return;
+    setCreatingCollection(true);
+    try {
+      await jellyfinApi.createCollection(serverUrl, accessToken, newCollectionName.trim());
+      setNewCollectionName('');
+      triggerReload();
+    } finally {
+      setCreatingCollection(false);
     }
   };
 
@@ -226,6 +280,26 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
               </button>
             </form>
           )}
+          {mode === 'collections' && (
+            <form onSubmit={handleCreateCollection} className="flex items-center gap-2">
+              <input
+                type="text"
+                value={newCollectionName}
+                onChange={(e) => setNewCollectionName(e.target.value)}
+                placeholder={t.catalog.createCollectionPlaceholder}
+                aria-label={t.catalog.newCollection}
+                className="bg-[#12131a] border border-white/15 rounded-xl px-3 py-2 min-h-[38px] text-xs sm:text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#00A4DC]"
+              />
+              <button
+                type="submit"
+                disabled={creatingCollection || !newCollectionName.trim()}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 min-h-[38px] rounded-xl bg-gradient-to-r from-[#AA5CC3] to-[#00A4DC] text-xs sm:text-sm font-semibold text-white disabled:opacity-50"
+              >
+                <Plus className="w-4 h-4" />
+                <span>{t.catalog.createCollectionBtn}</span>
+              </button>
+            </form>
+          )}
           {mode === 'search' && (
             <div className="relative w-full sm:w-64 lg:hidden">
               <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -292,12 +366,54 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
             </div>
           )}
 
+          {availableTags.length > 0 && mode !== 'collections' && mode !== 'playlists' && (
+            <select
+              id="catalog-tag-filter"
+              name="tag"
+              value={selectedTag}
+              onChange={(e) => setSelectedTag(e.target.value)}
+              aria-label={t.catalog.filterTagAria}
+              className="bg-[#12131a] border border-white/10 rounded-xl px-3 py-2 min-h-[38px] text-xs sm:text-sm text-white focus:outline-none focus:border-[#00A4DC] cursor-pointer"
+            >
+              <option value="" className="bg-[#12131a]">
+                {t.catalog.allTags}
+              </option>
+              {availableTags.map((tag) => (
+                <option key={tag} value={tag} className="bg-[#12131a]">
+                  {tag}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {availableYears.length > 0 && mode !== 'collections' && mode !== 'playlists' && (
+            <select
+              id="catalog-year-filter"
+              name="year"
+              value={selectedYear ?? ''}
+              onChange={(e) =>
+                setSelectedYear(e.target.value ? Number.parseInt(e.target.value, 10) : undefined)
+              }
+              aria-label={t.catalog.filterYearAria}
+              className="bg-[#12131a] border border-white/10 rounded-xl px-3 py-2 min-h-[38px] text-xs sm:text-sm text-white focus:outline-none focus:border-[#00A4DC] cursor-pointer"
+            >
+              <option value="" className="bg-[#12131a]">
+                {t.catalog.allYears}
+              </option>
+              {availableYears.map((yr) => (
+                <option key={yr} value={yr} className="bg-[#12131a]">
+                  {yr}
+                </option>
+              ))}
+            </select>
+          )}
+
           {mode !== 'playlists' && (
             <select
               id="catalog-sort-order"
               name="sortBy"
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
+              onChange={(e) => handleSortChange(e.target.value)}
               aria-label={t.catalog.sortCatalogAria}
               className="bg-[#12131a] border border-white/10 rounded-xl px-3 py-2 min-h-[38px] text-xs sm:text-sm text-white focus:outline-none focus:border-[#00A4DC] cursor-pointer"
             >

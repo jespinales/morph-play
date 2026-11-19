@@ -43,6 +43,7 @@ export const ProfileSelectPage: React.FC = () => {
   const [qcCode, setQcCode] = useState<string | null>(null);
   const [qcSecret, setQcSecret] = useState<string | null>(null);
   const [qcError, setQcError] = useState<string | null>(null);
+  const [loginDisclaimer, setLoginDisclaimer] = useState<string | null>(null);
 
   const [selectedUser, setSelectedUser] = useState<UserDto | null>(null);
   const [manualModalOpen, setManualModalOpen] = useState(false);
@@ -56,12 +57,14 @@ export const ProfileSelectPage: React.FC = () => {
     setLoadingUsers(true);
     setFetchError(null);
     try {
-      const [users, quickConnectOk] = await Promise.all([
+      const [users, quickConnectOk, branding] = await Promise.all([
         jellyfinApi.getPublicUsers(serverUrl),
         jellyfinApi.isQuickConnectEnabled(serverUrl),
+        jellyfinApi.getBrandingConfiguration(serverUrl),
       ]);
       setPublicUsers(users);
       setQcEnabled(quickConnectOk);
+      setLoginDisclaimer(branding?.LoginDisclaimer?.trim() || null);
       // Only open manual sign-in automatically when no local profiles are remembered
       if (users.length === 0 && savedProfiles.length === 0 && !quickConnectOk) {
         setManualModalOpen(true);
@@ -234,6 +237,11 @@ export const ProfileSelectPage: React.FC = () => {
             {t.profiles.whoIsWatching}
           </h1>
           <p className="text-sm sm:text-base text-zinc-400">{t.profiles.subtitle}</p>
+          {loginDisclaimer && (
+            <p className="max-w-xl mx-auto text-xs sm:text-sm text-zinc-300 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 mt-3">
+              {loginDisclaimer}
+            </p>
+          )}
         </div>
 
         {loadingUsers && displayedProfiles.length === 0 ? (

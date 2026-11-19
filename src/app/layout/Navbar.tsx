@@ -224,7 +224,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSearchResult }) => {
                     {hintsOpen && searchHints.length > 0 && (
                       <div className="absolute left-0 right-0 top-full mt-2 rounded-2xl bg-[#141620]/98 backdrop-blur-xl border border-white/15 shadow-2xl py-1.5 max-h-[60vh] overflow-y-auto z-50">
                         {searchHints.map((hint) => {
-                          const targetId = hint.ItemId || hint.Id;
+                          const targetId = hint.Id || hint.ItemId || '';
                           const thumb = getItemImageUrl(
                             serverUrl,
                             {

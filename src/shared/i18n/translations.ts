@@ -134,6 +134,8 @@ export interface TranslationDictionary {
     topRated: string;
     myList: string;
     recommendedForYou: string;
+    becauseYouWatched: (title: string) => string;
+    upcomingEpisodes: string;
     actionAndAdventure: string;
   };
   catalog: {
@@ -153,6 +155,9 @@ export interface TranslationDictionary {
     newPlaylist: string;
     createPlaylistPlaceholder: string;
     createPlaylistBtn: string;
+    newCollection: string;
+    createCollectionPlaceholder: string;
+    createCollectionBtn: string;
     loadingTitles: string;
     availableTitles: (count: number) => string;
     showingCount: (shown: number, total: number) => string;
@@ -164,6 +169,10 @@ export interface TranslationDictionary {
     searchInputAria: string;
     filterGenreAria: string;
     allGenres: string;
+    filterTagAria: string;
+    allTags: string;
+    filterYearAria: string;
+    allYears: string;
     sortCatalogAria: string;
     clearGenreFilter: string;
     sortRecent: string;
@@ -179,8 +188,21 @@ export interface TranslationDictionary {
     removeFromList: string;
     markUnplayed: string;
     markPlayed: string;
+    likeTitle: string;
+    dislikeTitle: string;
+    downloadItem: string;
     watchTrailer: string;
     extrasTitle: string;
+    additionalPartsTitle: string;
+    collectionsLabel: string;
+    ancestorsLabel: string;
+    themeMusicPlay: string;
+    themeMusicStop: string;
+    addToCollection: string;
+    collectionNamePlaceholder: string;
+    addedToCollection: (name: string) => string;
+    removeFromCollection: string;
+    externalIdsLabel: string;
     filmography: string;
     noPersonCredits: string;
     viewPersonAria: (name: string) => string;
@@ -202,6 +224,18 @@ export interface TranslationDictionary {
     createAndAdd: string;
     addedToPlaylist: (name: string) => string;
     removeFromPlaylist: string;
+    moveUp: string;
+    moveDown: string;
+    playlistSettingsTitle: string;
+    playlistRenamePlaceholder: string;
+    playlistPublicLabel: string;
+    playlistSaveBtn: string;
+    playlistSaved: string;
+    playlistShareTitle: string;
+    playlistShareSelectUser: string;
+    playlistShareCanEdit: string;
+    playlistShareAddBtn: string;
+    playlistShareRemoveBtn: string;
     cast: string;
     similarTitles: string;
   };
@@ -217,6 +251,19 @@ export interface TranslationDictionary {
     authorizeBtn: string;
     authorizeSuccess: string;
     authorizeError: string;
+    passwordTitle: string;
+    passwordDesc: string;
+    currentPasswordPlaceholder: string;
+    newPasswordPlaceholder: string;
+    updatePasswordBtn: string;
+    passwordUpdated: string;
+    passwordError: string;
+    bitrateTestTitle: string;
+    bitrateTestDesc: string;
+    bitrateTestBtn: string;
+    bitrateTestRunning: string;
+    bitrateTestResult: (mbps: number, rec: string) => string;
+    bitrateTestError: string;
     playbackPreferences: string;
     preferredQuality: string;
     qualityAutoLabel: string;
@@ -323,6 +370,23 @@ export interface TranslationDictionary {
     syncPlayLeave: string;
     syncPlayEmpty: string;
     syncPlayJoined: (name: string) => string;
+    syncPlayRepeatLabel: string;
+    syncPlayShuffleLabel: string;
+    syncPlayIgnoreWait: string;
+    syncPlayNextQueue: string;
+    syncPlayPrevQueue: string;
+    syncPlayStopRoom: string;
+    remoteSubtitlesSearchBtn: string;
+    remoteSubtitlesLangLabel: string;
+    remoteSubtitlesSearching: string;
+    remoteSubtitlesDownloadBtn: string;
+    remoteSubtitlesEmpty: string;
+    uploadSubtitleBtn: string;
+    deleteSubtitleAria: string;
+    castControlsHeading: string;
+    castSendMessagePlaceholder: string;
+    castSendMessageBtn: string;
+    castMessageSent: string;
   };
 }
 
@@ -448,6 +512,8 @@ const en: TranslationDictionary = {
     topRated: 'Top 10 Highest Rated',
     myList: 'My List',
     recommendedForYou: 'Recommended for You',
+    becauseYouWatched: (title) => `Because you watched ${title}`,
+    upcomingEpisodes: 'Upcoming Episodes',
     actionAndAdventure: 'Action & Adventure',
   },
   catalog: {
@@ -467,6 +533,9 @@ const en: TranslationDictionary = {
     newPlaylist: 'New playlist',
     createPlaylistPlaceholder: 'Playlist name',
     createPlaylistBtn: 'Create',
+    newCollection: 'New collection',
+    createCollectionPlaceholder: 'Collection name',
+    createCollectionBtn: 'Create collection',
     loadingTitles: 'Loading titles…',
     availableTitles: (count) => `${count} ${count === 1 ? 'title' : 'titles'} available`,
     showingCount: (shown, total) => `Showing ${shown} of ${total}`,
@@ -478,6 +547,10 @@ const en: TranslationDictionary = {
     searchInputAria: 'Search movies, series, or genres',
     filterGenreAria: 'Filter by genre',
     allGenres: 'All genres',
+    filterTagAria: 'Filter by tag',
+    allTags: 'All tags',
+    filterYearAria: 'Filter by year',
+    allYears: 'All years',
     sortCatalogAria: 'Sort catalog',
     clearGenreFilter: 'Clear genre filter',
     sortRecent: 'Recently added',
@@ -493,8 +566,21 @@ const en: TranslationDictionary = {
     removeFromList: 'Remove from My List',
     markUnplayed: 'Mark as unplayed',
     markPlayed: 'Mark as watched',
+    likeTitle: 'Like',
+    dislikeTitle: 'Dislike',
+    downloadItem: 'Download',
     watchTrailer: 'Watch trailer',
     extrasTitle: 'Extras & Featurettes',
+    additionalPartsTitle: 'Additional Parts',
+    collectionsLabel: 'Collections:',
+    ancestorsLabel: 'Path:',
+    themeMusicPlay: 'Theme audio',
+    themeMusicStop: 'Stop theme',
+    addToCollection: 'Add to collection',
+    collectionNamePlaceholder: 'New collection name',
+    addedToCollection: (name) => `Added to collection "${name}"`,
+    removeFromCollection: 'Remove from collection',
+    externalIdsLabel: 'External links:',
     filmography: 'Filmography on this server',
     noPersonCredits: 'No movies or series found for this person.',
     viewPersonAria: (name) => `View titles with ${name}`,
@@ -516,6 +602,18 @@ const en: TranslationDictionary = {
     createAndAdd: 'Create & add',
     addedToPlaylist: (name) => `Added to "${name}"`,
     removeFromPlaylist: 'Remove from playlist',
+    moveUp: 'Move up',
+    moveDown: 'Move down',
+    playlistSettingsTitle: 'Playlist settings',
+    playlistRenamePlaceholder: 'Playlist name',
+    playlistPublicLabel: 'Public playlist',
+    playlistSaveBtn: 'Save changes',
+    playlistSaved: 'Playlist updated',
+    playlistShareTitle: 'Shared access',
+    playlistShareSelectUser: 'Select user…',
+    playlistShareCanEdit: 'Can edit',
+    playlistShareAddBtn: 'Share',
+    playlistShareRemoveBtn: 'Revoke',
     cast: 'Cast',
     similarTitles: 'Similar titles',
   },
@@ -531,6 +629,19 @@ const en: TranslationDictionary = {
     authorizeBtn: 'Authorize',
     authorizeSuccess: 'Device authorized successfully.',
     authorizeError: 'Invalid or expired Quick Connect code.',
+    passwordTitle: 'Account password',
+    passwordDesc: 'Update the password for your Jellyfin profile.',
+    currentPasswordPlaceholder: 'Current password',
+    newPasswordPlaceholder: 'New password',
+    updatePasswordBtn: 'Update password',
+    passwordUpdated: 'Password updated successfully.',
+    passwordError: 'Could not update password. Verify your current password.',
+    bitrateTestTitle: 'Server speed test',
+    bitrateTestDesc: 'Measure real streaming bandwidth against your server using /Playback/BitrateTest.',
+    bitrateTestBtn: 'Run speed test',
+    bitrateTestRunning: 'Measuring…',
+    bitrateTestResult: (mbps, rec) => `Measured ${mbps} Mbps — recommended quality: ${rec}`,
+    bitrateTestError: 'Could not complete speed test.',
     playbackPreferences: 'Playback preferences',
     preferredQuality: 'Preferred streaming quality',
     qualityAutoLabel: 'Auto / Direct Play',
@@ -638,6 +749,23 @@ const en: TranslationDictionary = {
     syncPlayLeave: 'Leave room',
     syncPlayEmpty: 'No active SyncPlay rooms',
     syncPlayJoined: (name) => `SyncPlay: ${name}`,
+    syncPlayRepeatLabel: 'Repeat',
+    syncPlayShuffleLabel: 'Shuffle',
+    syncPlayIgnoreWait: 'Ignore wait',
+    syncPlayNextQueue: 'Next in room',
+    syncPlayPrevQueue: 'Prev in room',
+    syncPlayStopRoom: 'Stop room',
+    remoteSubtitlesSearchBtn: 'Find online',
+    remoteSubtitlesLangLabel: 'Language',
+    remoteSubtitlesSearching: 'Searching subtitles…',
+    remoteSubtitlesDownloadBtn: 'Download',
+    remoteSubtitlesEmpty: 'No online subtitles found.',
+    uploadSubtitleBtn: 'Upload .srt / .vtt / .ass',
+    deleteSubtitleAria: 'Delete subtitle',
+    castControlsHeading: 'Remote control',
+    castSendMessagePlaceholder: 'Message to screen…',
+    castSendMessageBtn: 'Send',
+    castMessageSent: 'Message sent',
   },
 };
 
@@ -763,6 +891,8 @@ const es: TranslationDictionary = {
     topRated: 'Top 10 mejor valorados',
     myList: 'Mi lista',
     recommendedForYou: 'Recomendado para ti',
+    becauseYouWatched: (title) => `Porque viste ${title}`,
+    upcomingEpisodes: 'Próximos estrenos',
     actionAndAdventure: 'Acción y aventura',
   },
   catalog: {
@@ -782,6 +912,9 @@ const es: TranslationDictionary = {
     newPlaylist: 'Nueva playlist',
     createPlaylistPlaceholder: 'Nombre de la playlist',
     createPlaylistBtn: 'Crear',
+    newCollection: 'Nueva colección',
+    createCollectionPlaceholder: 'Nombre de la colección',
+    createCollectionBtn: 'Crear colección',
     loadingTitles: 'Cargando títulos…',
     availableTitles: (count) => `${count} ${count === 1 ? 'título disponible' : 'títulos disponibles'}`,
     showingCount: (shown, total) => `Mostrando ${shown} de ${total}`,
@@ -793,6 +926,10 @@ const es: TranslationDictionary = {
     searchInputAria: 'Buscar película, serie o género',
     filterGenreAria: 'Filtrar por género',
     allGenres: 'Todos los géneros',
+    filterTagAria: 'Filtrar por etiqueta',
+    allTags: 'Todas las etiquetas',
+    filterYearAria: 'Filtrar por año',
+    allYears: 'Todos los años',
     sortCatalogAria: 'Ordenar catálogo',
     clearGenreFilter: 'Limpiar filtro de género',
     sortRecent: 'Recientes primero',
@@ -808,8 +945,21 @@ const es: TranslationDictionary = {
     removeFromList: 'Quitar de Mi lista',
     markUnplayed: 'Marcar como no visto',
     markPlayed: 'Marcar como visto',
+    likeTitle: 'Me gusta',
+    dislikeTitle: 'No me gusta',
+    downloadItem: 'Descargar',
     watchTrailer: 'Ver tráiler',
     extrasTitle: 'Extras y material adicional',
+    additionalPartsTitle: 'Partes adicionales',
+    collectionsLabel: 'Colecciones:',
+    ancestorsLabel: 'Ruta:',
+    themeMusicPlay: 'Música tema',
+    themeMusicStop: 'Detener tema',
+    addToCollection: 'Agregar a colección',
+    collectionNamePlaceholder: 'Nombre de nueva colección',
+    addedToCollection: (name) => `Agregado a colección "${name}"`,
+    removeFromCollection: 'Quitar de la colección',
+    externalIdsLabel: 'Enlaces externos:',
     filmography: 'Filmografía en este servidor',
     noPersonCredits: 'No se encontraron películas ni series para esta persona.',
     viewPersonAria: (name) => `Ver títulos de ${name}`,
@@ -831,6 +981,18 @@ const es: TranslationDictionary = {
     createAndAdd: 'Crear y agregar',
     addedToPlaylist: (name) => `Agregado a "${name}"`,
     removeFromPlaylist: 'Quitar de la playlist',
+    moveUp: 'Subir',
+    moveDown: 'Bajar',
+    playlistSettingsTitle: 'Ajustes de la playlist',
+    playlistRenamePlaceholder: 'Nombre de la playlist',
+    playlistPublicLabel: 'Playlist pública',
+    playlistSaveBtn: 'Guardar cambios',
+    playlistSaved: 'Playlist actualizada',
+    playlistShareTitle: 'Acceso compartido',
+    playlistShareSelectUser: 'Elegir usuario…',
+    playlistShareCanEdit: 'Puede editar',
+    playlistShareAddBtn: 'Compartir',
+    playlistShareRemoveBtn: 'Quitar acceso',
     cast: 'Reparto principal',
     similarTitles: 'Títulos similares',
   },
@@ -846,6 +1008,19 @@ const es: TranslationDictionary = {
     authorizeBtn: 'Autorizar',
     authorizeSuccess: 'Dispositivo autorizado correctamente.',
     authorizeError: 'Código Quick Connect inválido o expirado.',
+    passwordTitle: 'Contraseña de la cuenta',
+    passwordDesc: 'Actualiza la contraseña de tu perfil de Jellyfin.',
+    currentPasswordPlaceholder: 'Contraseña actual',
+    newPasswordPlaceholder: 'Nueva contraseña',
+    updatePasswordBtn: 'Actualizar contraseña',
+    passwordUpdated: 'Contraseña actualizada correctamente.',
+    passwordError: 'No se pudo actualizar. Verifica tu contraseña actual.',
+    bitrateTestTitle: 'Test de velocidad del servidor',
+    bitrateTestDesc: 'Mide el ancho de banda real contra tu servidor mediante /Playback/BitrateTest.',
+    bitrateTestBtn: 'Medir velocidad',
+    bitrateTestRunning: 'Midiendo…',
+    bitrateTestResult: (mbps, rec) => `Velocidad medida: ${mbps} Mbps — calidad recomendada: ${rec}`,
+    bitrateTestError: 'No se pudo completar la prueba de velocidad.',
     playbackPreferences: 'Preferencias de reproducción',
     preferredQuality: 'Calidad de transmisión preferida',
     qualityAutoLabel: 'Automática / Direct Play',
@@ -953,6 +1128,23 @@ const es: TranslationDictionary = {
     syncPlayLeave: 'Salir de sala',
     syncPlayEmpty: 'No hay salas SyncPlay activas',
     syncPlayJoined: (name) => `SyncPlay: ${name}`,
+    syncPlayRepeatLabel: 'Repetir',
+    syncPlayShuffleLabel: 'Aleatorio',
+    syncPlayIgnoreWait: 'No esperar',
+    syncPlayNextQueue: 'Siguiente en sala',
+    syncPlayPrevQueue: 'Anterior en sala',
+    syncPlayStopRoom: 'Detener sala',
+    remoteSubtitlesSearchBtn: 'Buscar en línea',
+    remoteSubtitlesLangLabel: 'Idioma',
+    remoteSubtitlesSearching: 'Buscando subtítulos…',
+    remoteSubtitlesDownloadBtn: 'Descargar',
+    remoteSubtitlesEmpty: 'No se encontraron subtítulos en línea.',
+    uploadSubtitleBtn: 'Subir .srt / .vtt / .ass',
+    deleteSubtitleAria: 'Eliminar subtítulo',
+    castControlsHeading: 'Control remoto',
+    castSendMessagePlaceholder: 'Mensaje en pantalla…',
+    castSendMessageBtn: 'Enviar',
+    castMessageSent: 'Mensaje enviado',
   },
 };
 

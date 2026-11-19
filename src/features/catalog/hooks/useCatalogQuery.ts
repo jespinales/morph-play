@@ -11,6 +11,8 @@ interface UseCatalogQueryParams {
   sortBy: string;
   sortOrder: 'Ascending' | 'Descending';
   selectedGenre: string;
+  selectedTag: string;
+  selectedYear: number | undefined;
   selectedLibraryId: string;
   searchTerm: string;
   locale: string;
@@ -41,6 +43,8 @@ export function useCatalogQuery({
   sortBy,
   sortOrder,
   selectedGenre,
+  selectedTag,
+  selectedYear,
   selectedLibraryId,
   searchTerm,
   locale,
@@ -55,6 +59,8 @@ export function useCatalogQuery({
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [serverGenres, setServerGenres] = useState<string[]>([]);
+  const [serverTags, setServerTags] = useState<string[]>([]);
+  const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [allViews, setAllViews] = useState<BaseItemDto[]>([]);
 
   // Fetch user views (libraries) once per session/refresh
@@ -75,25 +81,40 @@ export function useCatalogQuery({
     };
   }, [serverUrl, accessToken, userId, refreshSignal]);
 
-  // Fetch authoritative genre list from /Genres
+  // Fetch authoritative genres, tags (/Items/Filters2), and years (/Years)
   useEffect(() => {
     let active = true;
-    async function loadGenres() {
+    async function loadFilters() {
       if (!serverUrl || !accessToken || !userId || mode === 'collections' || mode === 'playlists') {
         setServerGenres([]);
+        setServerTags([]);
+        setAvailableYears([]);
         return;
       }
       try {
-        const list = await jellyfinApi.getGenres(serverUrl, accessToken, userId, {
+        const filterParams = {
           includeItemTypes: resolveIncludeTypes(mode),
           parentId: selectedLibraryId || undefined,
-        });
-        if (active) setServerGenres(list);
+        };
+        const [genresList, filters2, yearsList] = await Promise.all([
+          jellyfinApi.getGenres(serverUrl, accessToken, userId, filterParams).catch(() => []),
+          jellyfinApi.getFilters2(serverUrl, accessToken, userId, filterParams),
+          jellyfinApi.getYears(serverUrl, accessToken, userId, filterParams),
+        ]);
+        if (!active) return;
+        const mergedGenres = genresList.length > 0 ? genresList : (filters2.Genres ?? []);
+        setServerGenres(mergedGenres);
+        setServerTags(filters2.Tags ?? []);
+        setAvailableYears(yearsList);
       } catch {
-        if (active) setServerGenres([]);
+        if (active) {
+          setServerGenres([]);
+          setServerTags([]);
+          setAvailableYears([]);
+        }
       }
     }
-    loadGenres();
+    loadFilters();
     return () => {
       active = false;
     };
@@ -123,6 +144,8 @@ export function useCatalogQuery({
             sortOrder,
             filters: mode === 'favorites' ? 'IsFavorite' : undefined,
             genres: selectedGenre || undefined,
+            tags: selectedTag || undefined,
+            years: selectedYear,
             parentId: selectedLibraryId || undefined,
             searchTerm: mode === 'search' ? searchTerm.trim() || undefined : undefined,
             startIndex: 0,
@@ -148,6 +171,8 @@ export function useCatalogQuery({
     sortBy,
     sortOrder,
     selectedGenre,
+    selectedTag,
+    selectedYear,
     selectedLibraryId,
     searchTerm,
     serverUrl,
@@ -169,6 +194,8 @@ export function useCatalogQuery({
         sortOrder,
         filters: mode === 'favorites' ? 'IsFavorite' : undefined,
         genres: selectedGenre || undefined,
+        tags: selectedTag || undefined,
+        years: selectedYear,
         parentId: selectedLibraryId || undefined,
         searchTerm: mode === 'search' ? searchTerm.trim() || undefined : undefined,
         startIndex: items.length,
@@ -193,6 +220,8 @@ export function useCatalogQuery({
     sortBy,
     sortOrder,
     selectedGenre,
+    selectedTag,
+    selectedYear,
     selectedLibraryId,
     searchTerm,
     items.length,
@@ -230,6 +259,8 @@ export function useCatalogQuery({
     totalCount,
     hydratedItems,
     availableGenres,
+    availableTags: serverTags,
+    availableYears,
     availableLibraries,
     loadMore,
     triggerReload,

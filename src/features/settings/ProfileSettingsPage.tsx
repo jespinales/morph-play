@@ -1,5 +1,16 @@
 import React, { useState } from 'react';
-import { Globe, LogOut, Palette, QrCode, RotateCcw, Server, Sliders, Users } from 'lucide-react';
+import {
+  Activity,
+  Globe,
+  KeyRound,
+  LogOut,
+  Palette,
+  QrCode,
+  RotateCcw,
+  Server,
+  Sliders,
+  Users,
+} from 'lucide-react';
 import { useAuth } from '../../app/providers/AuthProvider';
 import { usePreferences } from '../../app/providers/PreferencesProvider';
 import { jellyfinApi } from '../../shared/api/jellyfin';
@@ -37,6 +48,13 @@ export const ProfileSettingsPage: React.FC = () => {
   const [qcAuthCode, setQcAuthCode] = useState('');
   const [qcAuthBusy, setQcAuthBusy] = useState(false);
   const [qcAuthStatus, setQcAuthStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [passwordBusy, setPasswordBusy] = useState(false);
+  const [passwordStatus, setPasswordStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [bitrateTesting, setBitrateTesting] = useState(false);
+  const [bitrateSummary, setBitrateSummary] = useState<string | null>(null);
+  const [bitrateError, setBitrateError] = useState(false);
 
   const handlePreferenceChange = (patch: Partial<UserPreferences>) => {
     updatePreferences(patch);
@@ -70,6 +88,46 @@ export const ProfileSettingsPage: React.FC = () => {
       setQcAuthStatus('error');
     } finally {
       setQcAuthBusy(false);
+    }
+  };
+
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!serverUrl || !accessToken || !user || !newPassword) return;
+    setPasswordBusy(true);
+    setPasswordStatus('idle');
+    try {
+      await jellyfinApi.updateUserPassword(
+        serverUrl,
+        accessToken,
+        user.Id,
+        currentPassword,
+        newPassword
+      );
+      setPasswordStatus('success');
+      setCurrentPassword('');
+      setNewPassword('');
+    } catch {
+      setPasswordStatus('error');
+    } finally {
+      setPasswordBusy(false);
+    }
+  };
+
+  const handleRunBitrateTest = async () => {
+    if (!serverUrl || !accessToken) return;
+    setBitrateTesting(true);
+    setBitrateError(false);
+    try {
+      const mbps = await jellyfinApi.measureBitrateMbps(serverUrl, accessToken);
+      const recommended: StreamingQuality =
+        mbps >= 25 ? 'auto' : mbps >= 12 ? '1080p' : mbps >= 5 ? '720p' : '480p';
+      updatePreferences({ quality: recommended });
+      setBitrateSummary(t.settings.bitrateTestResult(mbps, recommended));
+    } catch {
+      setBitrateError(true);
+    } finally {
+      setBitrateTesting(false);
     }
   };
 
@@ -308,6 +366,75 @@ export const ProfileSettingsPage: React.FC = () => {
           <p className="text-xs text-rose-400 font-medium">{t.settings.authorizeError}</p>
         )}
       </section>
+
+      {/* Server speed test */}
+      <section className="rounded-2xl bg-[#12131a] border border-white/10 p-6 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5">
+            <Activity className="w-5 h-5 text-[#00A4DC] shrink-0" />
+            <div>
+              <h2 className="text-lg font-bold text-white">{t.settings.bitrateTestTitle}</h2>
+              <p className="text-xs text-zinc-400">{t.settings.bitrateTestDesc}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => void handleRunBitrateTest()}
+            disabled={bitrateTesting}
+            className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-sm font-semibold text-white disabled:opacity-50 transition-colors shrink-0"
+          >
+            {bitrateTesting ? t.settings.bitrateTestRunning : t.settings.bitrateTestBtn}
+          </button>
+        </div>
+        {bitrateSummary && <p className="text-xs text-emerald-400 font-medium">{bitrateSummary}</p>}
+        {bitrateError && <p className="text-xs text-rose-400 font-medium">{t.settings.bitrateTestError}</p>}
+      </section>
+
+      {/* Password update (real Jellyfin accounts only) */}
+      {!isDemo && (
+        <section className="rounded-2xl bg-[#12131a] border border-white/10 p-6 space-y-4">
+          <div className="flex items-center gap-2.5">
+            <KeyRound className="w-5 h-5 text-[#00A4DC] shrink-0" />
+            <div>
+              <h2 className="text-lg font-bold text-white">{t.settings.passwordTitle}</h2>
+              <p className="text-xs text-zinc-400">{t.settings.passwordDesc}</p>
+            </div>
+          </div>
+
+          <form onSubmit={handleUpdatePassword} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <input
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              placeholder={t.settings.currentPasswordPlaceholder}
+              autoComplete="current-password"
+              className="bg-[#0a0a0e] border border-white/15 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#00A4DC]"
+            />
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder={t.settings.newPasswordPlaceholder}
+              autoComplete="new-password"
+              className="bg-[#0a0a0e] border border-white/15 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#00A4DC]"
+            />
+            <button
+              type="submit"
+              disabled={passwordBusy || !newPassword}
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#AA5CC3] to-[#00A4DC] text-white font-semibold text-sm disabled:opacity-50"
+            >
+              {t.settings.updatePasswordBtn}
+            </button>
+          </form>
+
+          {passwordStatus === 'success' && (
+            <p className="text-xs text-emerald-400 font-medium">{t.settings.passwordUpdated}</p>
+          )}
+          {passwordStatus === 'error' && (
+            <p className="text-xs text-rose-400 font-medium">{t.settings.passwordError}</p>
+          )}
+        </section>
+      )}
 
       {/* Custom branding (administrator profiles only) */}
       {isAdmin && (

@@ -1,25 +1,39 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  ArrowDown,
+  ArrowUp,
   Calendar,
   Check,
   Clapperboard,
   Clock,
+  Download,
+  ExternalLink,
   Eye,
   Film,
+  FolderPlus,
   Layers,
   ListPlus,
   ListVideo,
+  Music,
   Play,
   Plus,
   Star,
+  ThumbsDown,
+  ThumbsUp,
   Trash2,
   User as UserIcon,
+  VolumeX,
   X,
 } from 'lucide-react';
 import { useAuth } from '../../app/providers/AuthProvider';
 import { usePreferences } from '../../app/providers/PreferencesProvider';
 import { jellyfinApi } from '../../shared/api/jellyfin';
-import { getItemImageUrl, getPersonImageUrl } from '../../shared/api/playback';
+import {
+  getItemDownloadUrl,
+  getItemImageUrl,
+  getPersonImageUrl,
+  getThemeAudioUrl,
+} from '../../shared/api/playback';
 import { BaseItemDto } from '../../shared/types/jellyfin';
 import { formatDurationFromTicks } from '../../shared/utils/time';
 import { useMediaDetail } from './hooks/useMediaDetail';
@@ -46,6 +60,16 @@ export const DetailModal: React.FC<DetailModalProps> = ({
   const [playlists, setPlaylists] = useState<BaseItemDto[]>([]);
   const [newPlaylistName, setNewPlaylistName] = useState('');
   const [playlistFeedback, setPlaylistFeedback] = useState<string | null>(null);
+  const [collectionPickerOpen, setCollectionPickerOpen] = useState(false);
+  const [collections, setCollections] = useState<BaseItemDto[]>([]);
+  const [newCollectionName, setNewCollectionName] = useState('');
+  const [editPlaylistName, setEditPlaylistName] = useState('');
+  const [editPlaylistPublic, setEditPlaylistPublic] = useState(false);
+  const [playlistSavedFlag, setPlaylistSavedFlag] = useState(false);
+  const [shareUserId, setShareUserId] = useState('');
+  const [shareCanEdit, setShareCanEdit] = useState(false);
+  const [playingThemeAudio, setPlayingThemeAudio] = useState(false);
+  const themeAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const {
     detail,
@@ -56,12 +80,26 @@ export const DetailModal: React.FC<DetailModalProps> = ({
     personCredits,
     trailers,
     specialFeatures,
+    additionalParts,
     similar,
+    externalIds,
+    itemCollections,
+    ancestors,
+    themeSongs,
+    playlistMeta,
+    playlistUsers,
+    publicUsers,
     loadingEpisodes,
     handleSeasonChange,
     handleToggleFavorite,
     handleTogglePlayed,
+    handleSetRating,
     handleRemoveFromPlaylist,
+    handleMovePlaylistItem,
+    handleUpdatePlaylist,
+    handleSetPlaylistUser,
+    handleRemovePlaylistUser,
+    handleRemoveFromCollection,
   } = useMediaDetail({
     item,
     serverUrl,
@@ -73,17 +111,98 @@ export const DetailModal: React.FC<DetailModalProps> = ({
   useEffect(() => {
     setLogoFailed(false);
     setPlaylistPickerOpen(false);
+    setCollectionPickerOpen(false);
     setPlaylistFeedback(null);
+    setPlaylistSavedFlag(false);
+    setPlayingThemeAudio(false);
+    if (themeAudioRef.current) {
+      themeAudioRef.current.pause();
+      themeAudioRef.current = null;
+    }
   }, [item]);
+
+  useEffect(() => {
+    setEditPlaylistName(detail.Name);
+  }, [detail.Name]);
+
+  useEffect(() => {
+    if (playlistMeta) {
+      setEditPlaylistPublic(Boolean(playlistMeta.OpenAccess));
+    }
+  }, [playlistMeta]);
+
+  useEffect(() => {
+    return () => {
+      if (themeAudioRef.current) {
+        themeAudioRef.current.pause();
+        themeAudioRef.current = null;
+      }
+    };
+  }, []);
 
   const handleOpenPlaylistPicker = async () => {
     const nextOpen = !playlistPickerOpen;
     setPlaylistPickerOpen(nextOpen);
+    setCollectionPickerOpen(false);
     setPlaylistFeedback(null);
     if (nextOpen && serverUrl && accessToken && user) {
       const list = await jellyfinApi.getPlaylists(serverUrl, accessToken, user.Id).catch(() => []);
       setPlaylists(list);
     }
+  };
+
+  const handleOpenCollectionPicker = async () => {
+    const nextOpen = !collectionPickerOpen;
+    setCollectionPickerOpen(nextOpen);
+    setPlaylistPickerOpen(false);
+    setPlaylistFeedback(null);
+    if (nextOpen && serverUrl && accessToken && user) {
+      const res = await jellyfinApi
+        .getItems(serverUrl, accessToken, user.Id, {
+          includeItemTypes: 'BoxSet',
+          sortBy: 'SortName',
+          sortOrder: 'Ascending',
+          limit: 100,
+        })
+        .catch(() => ({ Items: [], TotalRecordCount: 0 }));
+      setCollections(res.Items);
+    }
+  };
+
+  const handleAddToExistingCollection = async (col: BaseItemDto) => {
+    if (!serverUrl || !accessToken) return;
+    await jellyfinApi.addToCollection(serverUrl, accessToken, col.Id, [detail.Id]);
+    setPlaylistFeedback(t.detail.addedToCollection(col.Name));
+    setCollectionPickerOpen(false);
+  };
+
+  const handleCreateCollectionWithItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!serverUrl || !accessToken || !newCollectionName.trim()) return;
+    const title = newCollectionName.trim();
+    await jellyfinApi.createCollection(serverUrl, accessToken, title, [detail.Id]);
+    setNewCollectionName('');
+    setPlaylistFeedback(t.detail.addedToCollection(title));
+    setCollectionPickerOpen(false);
+  };
+
+  const handleToggleThemeMusic = () => {
+    if (playingThemeAudio && themeAudioRef.current) {
+      themeAudioRef.current.pause();
+      themeAudioRef.current = null;
+      setPlayingThemeAudio(false);
+      return;
+    }
+    const song = themeSongs[0];
+    if (!song || !serverUrl || !accessToken) return;
+    const audioUrl = getThemeAudioUrl(serverUrl, song.Id, accessToken);
+    if (!audioUrl) return;
+    const audio = new Audio(audioUrl);
+    audio.volume = 0.45;
+    audio.onended = () => setPlayingThemeAudio(false);
+    void audio.play().catch(() => setPlayingThemeAudio(false));
+    themeAudioRef.current = audio;
+    setPlayingThemeAudio(true);
   };
 
   const handleAddToExistingPlaylist = async (pl: BaseItemDto) => {
@@ -147,6 +266,12 @@ export const DetailModal: React.FC<DetailModalProps> = ({
   const durationLabel = formatDurationFromTicks(detail.RunTimeTicks);
   const isFavorite = Boolean(detail.UserData?.IsFavorite);
   const isPlayed = Boolean(detail.UserData?.Played);
+  const userLikes = detail.UserData?.Likes;
+  const downloadUrl =
+    detail.CanDownload && accessToken
+      ? getItemDownloadUrl(serverUrl, detail.Id, accessToken)
+      : null;
+  const hasThemeMusic = Boolean(themeSongs.length > 0 && accessToken);
   const hasResume = (detail.UserData?.PlaybackPositionTicks ?? 0) > 0;
   const cast = (detail.People ?? []).filter((p) => p.Type === 'Actor' || !p.Type).slice(0, 12);
   const videoStream = detail.MediaStreams?.find((s) => s.Type === 'Video');
@@ -264,6 +389,120 @@ export const DetailModal: React.FC<DetailModalProps> = ({
                     >
                       <Eye className="w-5 h-5" />
                     </button>
+
+                    <button
+                      type="button"
+                      onClick={() => void handleSetRating(true)}
+                      title={t.detail.likeTitle}
+                      aria-label={t.detail.likeTitle}
+                      className={`p-2.5 rounded-lg border transition-all ${
+                        userLikes === true
+                          ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300'
+                          : 'bg-white/10 border-white/25 text-zinc-200 hover:bg-white/20'
+                      }`}
+                    >
+                      <ThumbsUp className="w-4 h-4" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => void handleSetRating(false)}
+                      title={t.detail.dislikeTitle}
+                      aria-label={t.detail.dislikeTitle}
+                      className={`p-2.5 rounded-lg border transition-all ${
+                        userLikes === false
+                          ? 'bg-rose-500/20 border-rose-400 text-rose-300'
+                          : 'bg-white/10 border-white/25 text-zinc-200 hover:bg-white/20'
+                      }`}
+                    >
+                      <ThumbsDown className="w-4 h-4" />
+                    </button>
+
+                    {downloadUrl && (
+                      <a
+                        href={downloadUrl}
+                        download
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={t.detail.downloadItem}
+                        aria-label={t.detail.downloadItem}
+                        className="p-2.5 rounded-lg border border-white/25 bg-white/10 hover:bg-white/20 text-zinc-200 transition-all"
+                      >
+                        <Download className="w-4 h-4" />
+                      </a>
+                    )}
+
+                    {hasThemeMusic && (
+                      <button
+                        type="button"
+                        onClick={handleToggleThemeMusic}
+                        title={playingThemeAudio ? t.detail.themeMusicStop : t.detail.themeMusicPlay}
+                        className={`inline-flex items-center gap-1.5 px-3 py-2.5 rounded-lg border text-xs font-semibold transition-all ${
+                          playingThemeAudio
+                            ? 'bg-[#00A4DC]/20 border-[#00A4DC] text-[#7dd3fc]'
+                            : 'bg-white/10 border-white/25 text-zinc-200 hover:bg-white/20'
+                        }`}
+                      >
+                        {playingThemeAudio ? (
+                          <VolumeX className="w-4 h-4" />
+                        ) : (
+                          <Music className="w-4 h-4" />
+                        )}
+                        <span className="hidden sm:inline">
+                          {playingThemeAudio ? t.detail.themeMusicStop : t.detail.themeMusicPlay}
+                        </span>
+                      </button>
+                    )}
+
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => void handleOpenCollectionPicker()}
+                        title={t.detail.addToCollection}
+                        aria-label={t.detail.addToCollection}
+                        className="p-2.5 rounded-lg border border-white/25 bg-white/10 hover:bg-white/20 text-zinc-200 transition-all"
+                      >
+                        <FolderPlus className="w-5 h-5" />
+                      </button>
+
+                      {collectionPickerOpen && (
+                        <div className="absolute left-0 bottom-12 z-40 w-64 rounded-xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 p-3 shadow-2xl space-y-2.5">
+                          <p className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                            {t.detail.addToCollection}
+                          </p>
+                          {collections.length > 0 && (
+                            <div className="max-h-36 overflow-y-auto space-y-1">
+                              {collections.map((col) => (
+                                <button
+                                  key={col.Id}
+                                  type="button"
+                                  onClick={() => void handleAddToExistingCollection(col)}
+                                  className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-zinc-200 hover:bg-white/10 truncate"
+                                >
+                                  {col.Name}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          <form onSubmit={handleCreateCollectionWithItem} className="flex gap-1.5 pt-1 border-t border-white/10">
+                            <input
+                              type="text"
+                              value={newCollectionName}
+                              onChange={(e) => setNewCollectionName(e.target.value)}
+                              placeholder={t.detail.collectionNamePlaceholder}
+                              className="flex-1 min-w-0 bg-[#0a0a0e] border border-white/15 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#00A4DC]"
+                            />
+                            <button
+                              type="submit"
+                              disabled={!newCollectionName.trim()}
+                              className="px-2.5 py-1.5 rounded-lg bg-[#00A4DC] text-black font-bold text-xs disabled:opacity-50"
+                            >
+                              {t.detail.createAndAdd}
+                            </button>
+                          </form>
+                        </div>
+                      )}
+                    </div>
 
                     <div className="relative">
                       <button
@@ -402,6 +641,68 @@ export const DetailModal: React.FC<DetailModalProps> = ({
                     </span>
                   </div>
                 )}
+                {itemCollections.length > 0 && (
+                  <div>
+                    <span className="text-zinc-400">{t.detail.collectionsLabel} </span>
+                    <span className="inline-flex flex-wrap gap-1.5 mt-1">
+                      {itemCollections.map((col) => (
+                        <button
+                          key={col.Id}
+                          type="button"
+                          onClick={() => onSelectItem(col)}
+                          className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-xs text-[#7dd3fc] font-medium"
+                        >
+                          {col.Name}
+                        </button>
+                      ))}
+                    </span>
+                  </div>
+                )}
+                {ancestors.length > 1 && (
+                  <div>
+                    <span className="text-zinc-400">{t.detail.ancestorsLabel} </span>
+                    <span className="text-zinc-300">
+                      {ancestors
+                        .slice()
+                        .reverse()
+                        .slice(0, -1)
+                        .map((a) => a.Name)
+                        .join(' › ')}
+                    </span>
+                  </div>
+                )}
+                {(detail.ExternalUrls?.length || externalIds.length > 0) && (
+                  <div>
+                    <span className="text-zinc-400">{t.detail.externalIdsLabel} </span>
+                    <div className="flex flex-wrap gap-1.5 mt-1">
+                      {(detail.ExternalUrls ?? []).map((ext) =>
+                        ext.Url ? (
+                          <a
+                            key={ext.Url}
+                            href={ext.Url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-xs text-zinc-200"
+                          >
+                            <span>{ext.Name}</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        ) : null
+                      )}
+                      {(!detail.ExternalUrls || detail.ExternalUrls.length === 0) &&
+                        externalIds.map((info) =>
+                          info.Name ? (
+                            <span
+                              key={info.Name}
+                              className="px-2 py-0.5 rounded bg-white/10 text-xs text-zinc-300"
+                            >
+                              {info.Name}
+                            </span>
+                          ) : null
+                        )}
+                    </div>
+                  </div>
+                )}
                 <div>
                   <span className="text-zinc-400">{t.detail.format} </span>
                   <span className="text-zinc-100">
@@ -529,7 +830,7 @@ export const DetailModal: React.FC<DetailModalProps> = ({
           )}
 
           {/* Collection or Playlist items */}
-          {(detail.Type === 'BoxSet' || detail.Type === 'Playlist') && collectionItems.length > 0 && (
+          {(detail.Type === 'BoxSet' || detail.Type === 'Playlist') && (
             <section className="space-y-4 pt-2 border-t border-white/10">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 {detail.Type === 'Playlist' ? (
@@ -539,56 +840,209 @@ export const DetailModal: React.FC<DetailModalProps> = ({
                 )}
                 {detail.Type === 'Playlist' ? t.detail.playlistItems : t.detail.collectionItems}
               </h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
-                {collectionItems.map((colItem) => {
-                  const poster = getItemImageUrl(serverUrl, colItem, 'Primary', 400);
-                  return (
-                    <div
-                      key={`${colItem.PlaylistItemId ?? colItem.Id}`}
-                      className="group relative aspect-[2/3] rounded-lg overflow-hidden bg-[#181a24] ring-1 ring-white/10 hover:ring-white/40 transition-all"
-                    >
-                      <button
-                        type="button"
-                        onClick={() =>
-                          detail.Type === 'Playlist'
-                            ? onPlay(colItem, collectionItems)
-                            : onSelectItem(colItem)
-                        }
-                        className="w-full h-full text-left"
-                      >
-                        {poster ? (
-                          <img
-                            src={poster}
-                            alt={colItem.Name}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center p-3 text-center text-sm font-bold">
-                            {colItem.Name}
-                          </div>
-                        )}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent flex items-end p-3">
-                          <span className="text-xs sm:text-sm font-bold text-white line-clamp-2">
-                            {colItem.Name}
-                          </span>
-                        </div>
-                      </button>
 
-                      {detail.Type === 'Playlist' && colItem.PlaylistItemId && (
+              {detail.Type === 'Playlist' && (
+                <div className="rounded-xl bg-white/[0.03] border border-white/10 p-4 space-y-3">
+                  <p className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                    {t.detail.playlistSettingsTitle}
+                  </p>
+                  <form
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      await handleUpdatePlaylist(editPlaylistName, editPlaylistPublic);
+                      setPlaylistSavedFlag(true);
+                    }}
+                    className="flex flex-wrap items-center gap-3"
+                  >
+                    <input
+                      type="text"
+                      value={editPlaylistName}
+                      onChange={(e) => {
+                        setEditPlaylistName(e.target.value);
+                        setPlaylistSavedFlag(false);
+                      }}
+                      placeholder={t.detail.playlistRenamePlaceholder}
+                      className="flex-1 min-w-[180px] bg-[#0a0a0e] border border-white/15 rounded-lg px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-[#00A4DC]"
+                    />
+                    <label className="inline-flex items-center gap-2 text-xs text-zinc-200 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editPlaylistPublic}
+                        onChange={(e) => {
+                          setEditPlaylistPublic(e.target.checked);
+                          setPlaylistSavedFlag(false);
+                        }}
+                        className="w-4 h-4 accent-[#00A4DC]"
+                      />
+                      <span>{t.detail.playlistPublicLabel}</span>
+                    </label>
+                    <button
+                      type="submit"
+                      className="px-3.5 py-2 rounded-lg bg-[#00A4DC] text-black font-bold text-xs"
+                    >
+                      {t.detail.playlistSaveBtn}
+                    </button>
+                    {playlistSavedFlag && (
+                      <span className="text-xs text-emerald-400 font-semibold">
+                        {t.detail.playlistSaved}
+                      </span>
+                    )}
+                  </form>
+
+                  {publicUsers.length > 0 && (
+                    <div className="pt-2 border-t border-white/10 space-y-2">
+                      <p className="text-xs font-semibold text-zinc-300">
+                        {t.detail.playlistShareTitle}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <select
+                          value={shareUserId}
+                          onChange={(e) => setShareUserId(e.target.value)}
+                          className="bg-[#0a0a0e] border border-white/15 rounded-lg px-2.5 py-1.5 text-xs text-white"
+                        >
+                          <option value="">{t.detail.playlistShareSelectUser}</option>
+                          {publicUsers
+                            .filter((u) => u.Id !== user?.Id)
+                            .map((u) => (
+                              <option key={u.Id} value={u.Id}>
+                                {u.Name}
+                              </option>
+                            ))}
+                        </select>
+                        <label className="inline-flex items-center gap-1.5 text-xs text-zinc-300 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={shareCanEdit}
+                            onChange={(e) => setShareCanEdit(e.target.checked)}
+                            className="w-3.5 h-3.5 accent-[#00A4DC]"
+                          />
+                          <span>{t.detail.playlistShareCanEdit}</span>
+                        </label>
                         <button
                           type="button"
-                          onClick={() => void handleRemoveFromPlaylist(colItem)}
-                          title={t.detail.removeFromPlaylist}
-                          aria-label={t.detail.removeFromPlaylist}
-                          className="absolute top-2 right-2 z-10 w-8 h-8 rounded-full bg-black/70 hover:bg-rose-600/90 text-white border border-white/15 flex items-center justify-center transition-colors"
+                          disabled={!shareUserId}
+                          onClick={() => void handleSetPlaylistUser(shareUserId, shareCanEdit)}
+                          className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-semibold text-white disabled:opacity-40"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          {t.detail.playlistShareAddBtn}
                         </button>
+                      </div>
+                      {playlistUsers.length > 0 && (
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          {playlistUsers.map((perm) => {
+                            const matchedUser = publicUsers.find((u) => u.Id === perm.UserId);
+                            return (
+                              <span
+                                key={perm.UserId}
+                                className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-white/10 text-xs text-zinc-200"
+                              >
+                                <span>{matchedUser?.Name ?? perm.UserId}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleRemovePlaylistUser(perm.UserId)}
+                                  title={t.detail.playlistShareRemoveBtn}
+                                  className="text-rose-300 hover:text-rose-200"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </span>
+                            );
+                          })}
+                        </div>
                       )}
                     </div>
-                  );
-                })}
-              </div>
+                  )}
+                </div>
+              )}
+
+              {collectionItems.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
+                  {collectionItems.map((colItem, colIdx) => {
+                    const poster = getItemImageUrl(serverUrl, colItem, 'Primary', 400);
+                    return (
+                      <div
+                        key={`${colItem.PlaylistItemId ?? colItem.Id}`}
+                        className="group relative aspect-[2/3] rounded-lg overflow-hidden bg-[#181a24] ring-1 ring-white/10 hover:ring-white/40 transition-all"
+                      >
+                        <button
+                          type="button"
+                          onClick={() =>
+                            detail.Type === 'Playlist'
+                              ? onPlay(colItem, collectionItems)
+                              : onSelectItem(colItem)
+                          }
+                          className="w-full h-full text-left"
+                        >
+                          {poster ? (
+                            <img
+                              src={poster}
+                              alt={colItem.Name}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center p-3 text-center text-sm font-bold">
+                              {colItem.Name}
+                            </div>
+                          )}
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent flex items-end p-3">
+                            <span className="text-xs sm:text-sm font-bold text-white line-clamp-2">
+                              {colItem.Name}
+                            </span>
+                          </div>
+                        </button>
+
+                        {detail.Type === 'Playlist' && colItem.PlaylistItemId && (
+                          <div className="absolute top-2 right-2 z-10 flex items-center gap-1">
+                            {colIdx > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => void handleMovePlaylistItem(colItem, colIdx - 1)}
+                                title={t.detail.moveUp}
+                                aria-label={t.detail.moveUp}
+                                className="w-7 h-7 rounded-full bg-black/70 hover:bg-white/20 text-white border border-white/15 flex items-center justify-center transition-colors"
+                              >
+                                <ArrowUp className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            {colIdx < collectionItems.length - 1 && (
+                              <button
+                                type="button"
+                                onClick={() => void handleMovePlaylistItem(colItem, colIdx + 1)}
+                                title={t.detail.moveDown}
+                                aria-label={t.detail.moveDown}
+                                className="w-7 h-7 rounded-full bg-black/70 hover:bg-white/20 text-white border border-white/15 flex items-center justify-center transition-colors"
+                              >
+                                <ArrowDown className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => void handleRemoveFromPlaylist(colItem)}
+                              title={t.detail.removeFromPlaylist}
+                              aria-label={t.detail.removeFromPlaylist}
+                              className="w-7 h-7 rounded-full bg-black/70 hover:bg-rose-600/90 text-white border border-white/15 flex items-center justify-center transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+
+                        {detail.Type === 'BoxSet' && (
+                          <button
+                            type="button"
+                            onClick={() => void handleRemoveFromCollection(colItem)}
+                            title={t.detail.removeFromCollection}
+                            aria-label={t.detail.removeFromCollection}
+                            className="absolute top-2 right-2 z-10 w-8 h-8 rounded-full bg-black/70 hover:bg-rose-600/90 text-white border border-white/15 flex items-center justify-center transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </section>
           )}
 
@@ -637,6 +1091,29 @@ export const DetailModal: React.FC<DetailModalProps> = ({
                   })}
                 </div>
               )}
+            </section>
+          )}
+
+          {/* Additional parts */}
+          {additionalParts.length > 0 && (
+            <section className="space-y-3 pt-2 border-t border-white/10">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Film className="w-5 h-5 text-[#00A4DC]" />
+                {t.detail.additionalPartsTitle}
+              </h3>
+              <div className="flex flex-wrap gap-2.5">
+                {additionalParts.map((part) => (
+                  <button
+                    key={part.Id}
+                    type="button"
+                    onClick={() => onPlay(part)}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 text-xs sm:text-sm font-semibold text-white transition-colors"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-white" />
+                    <span>{part.Name}</span>
+                  </button>
+                ))}
+              </div>
             </section>
           )}
 
