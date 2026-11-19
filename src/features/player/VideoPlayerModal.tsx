@@ -31,7 +31,9 @@ import { PlayerControls } from './components/PlayerControls';
 import { PlayerEndScreen } from './components/PlayerEndScreen';
 import { ResumePromptOverlay } from './components/ResumePromptOverlay';
 import { PlayerMenuKind } from './components/TrackMenus';
+import { useAssSubtitles } from './hooks/useAssSubtitles';
 import { useEpisodeQueue } from './hooks/useEpisodeQueue';
+import { useMediaSession } from './hooks/useMediaSession';
 import { usePlayerKeyboard } from './hooks/usePlayerKeyboard';
 import { useSubtitles } from './hooks/useSubtitles';
 
@@ -123,7 +125,12 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   const [volume, setVolume] = useState<number>(1);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [playbackRate, setPlaybackRate] = useState<number>(1);
+  const [isPiP, setIsPiP] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const supportsPiP =
+    typeof document !== 'undefined' &&
+    'pictureInPictureEnabled' in document &&
+    Boolean(document.pictureInPictureEnabled);
   const [showControls, setShowControls] = useState<boolean>(true);
   const [openMenu, setOpenMenu] = useState<PlayerMenuKind>(null);
   const [autoSkippedId, setAutoSkippedId] = useState<string | null>(null);
@@ -159,7 +166,21 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     onLoadingStart: handleQueueLoadingStart,
   });
 
-  const subtitleLines = useSubtitles(videoRef, builtStream, selectedSubtitleIndex);
+  const { isAssActive } = useAssSubtitles({
+    videoRef,
+    serverUrl,
+    accessToken,
+    itemId: activeItem.Id,
+    mediaSource,
+    builtStream,
+    selectedSubtitleIndex,
+  });
+
+  const subtitleLines = useSubtitles(
+    videoRef,
+    builtStream,
+    isAssActive ? -1 : selectedSubtitleIndex
+  );
 
   const clearBuffering = useCallback(() => {
     if (bufferingTimerRef.current) {
@@ -592,6 +613,9 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     isClosingRef.current = true;
 
     if (resumePrompt || !mediaSource) {
+      if (document.pictureInPictureElement) {
+        document.exitPictureInPicture().catch(() => {});
+      }
       if (document.fullscreenElement) {
         document.exitFullscreen().catch(() => {});
       }
@@ -621,6 +645,9 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     if (seekSyncTimerRef.current) {
       window.clearTimeout(seekSyncTimerRef.current);
       seekSyncTimerRef.current = null;
+    }
+    if (document.pictureInPictureElement) {
+      document.exitPictureInPicture().catch(() => {});
     }
     if (document.fullscreenElement) {
       document.exitFullscreen().catch(() => {});
@@ -706,6 +733,18 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     [duration, bumpControls]
   );
 
+  const togglePictureInPicture = useCallback(() => {
+    const video = videoRef.current;
+    if (!video || !supportsPiP) return;
+    if (document.pictureInPictureElement === video) {
+      document.exitPictureInPicture().catch(() => {});
+      return;
+    }
+    if (video.readyState >= 1 && !video.disablePictureInPicture) {
+      video.requestPictureInPicture().catch(() => {});
+    }
+  }, [supportsPiP]);
+
   const toggleFullscreen = useCallback(() => {
     const el = containerRef.current;
     const video = videoRef.current as
@@ -730,13 +769,19 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     const onFsChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
     const onWebkitBegin = () => setIsFullscreen(true);
     const onWebkitEnd = () => setIsFullscreen(false);
+    const onEnterPiP = () => setIsPiP(true);
+    const onLeavePiP = () => setIsPiP(false);
     document.addEventListener('fullscreenchange', onFsChange);
     video?.addEventListener('webkitbeginfullscreen', onWebkitBegin);
     video?.addEventListener('webkitendfullscreen', onWebkitEnd);
+    video?.addEventListener('enterpictureinpicture', onEnterPiP);
+    video?.addEventListener('leavepictureinpicture', onLeavePiP);
     return () => {
       document.removeEventListener('fullscreenchange', onFsChange);
       video?.removeEventListener('webkitbeginfullscreen', onWebkitBegin);
       video?.removeEventListener('webkitendfullscreen', onWebkitEnd);
+      video?.removeEventListener('enterpictureinpicture', onEnterPiP);
+      video?.removeEventListener('leavepictureinpicture', onLeavePiP);
     };
   }, []);
 
@@ -758,6 +803,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     onClosePlayer: handleClosePlayer,
     onTogglePlayPause: togglePlayPause,
     onSeekBy: seekBy,
+    onTogglePiP: togglePictureInPicture,
     onToggleFullscreen: toggleFullscreen,
     onVolumeChange: (vol, muted) => {
       setVolume(vol);
@@ -1377,6 +1423,33 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         ? `${activeItem.ProductionYear}`
         : '';
 
+  useMediaSession({
+    serverUrl,
+    activeItem,
+    titleDisplay,
+    subtitleDisplay,
+    isPlaying,
+    currentTime,
+    duration,
+    playbackRate,
+    hasNextEpisode: Boolean(nextEpisode),
+    onPlay: () => {
+      videoRef.current?.play().catch(() => {});
+    },
+    onPause: () => {
+      videoRef.current?.pause();
+    },
+    onSeekBy: seekBy,
+    onSeekTo: (next) => {
+      if (videoRef.current) videoRef.current.currentTime = next;
+      setCurrentTime(next);
+    },
+    onNextTrack: handlePlayNextEpisode,
+    onStop: () => {
+      void handleClosePlayer();
+    },
+  });
+
   return (
     <div
       ref={containerRef}
@@ -1526,7 +1599,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         style={{ opacity: 0.995 }}
       >
         {builtStream?.subtitleTracks
-          .filter((track) => track.index === selectedSubtitleIndex)
+          .filter((track) => !isAssActive && track.index === selectedSubtitleIndex)
           .map((track) => (
             <track
               key={track.index}
@@ -1539,7 +1612,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
       </video>
 
       {/* Cinema-positioned subtitle overlay */}
-      {subtitleLines.length > 0 && selectedSubtitleIndex !== -1 && (
+      {!isAssActive && subtitleLines.length > 0 && selectedSubtitleIndex !== -1 && (
         <div
           className={`pointer-events-none absolute inset-x-0 z-20 flex flex-col items-center gap-1 px-4 sm:px-10 transition-all duration-200 ${
             showControls ? 'bottom-24 sm:bottom-28' : 'bottom-10 sm:bottom-14'
@@ -1685,6 +1758,8 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           progressPercent={progressPercent}
           volume={volume}
           isMuted={isMuted}
+          supportsPiP={supportsPiP}
+          isPiP={isPiP}
           isFullscreen={isFullscreen}
           playbackRate={playbackRate}
           openMenu={openMenu}
@@ -1774,9 +1849,12 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
             if (videoRef.current) videoRef.current.playbackRate = rate;
             setOpenMenu(null);
           }}
+          onTogglePiP={togglePictureInPicture}
           onToggleFullscreen={toggleFullscreen}
         />
       )}
     </div>
   );
 };
+
+export default VideoPlayerModal;

@@ -108,6 +108,16 @@ export interface MediaStream {
   Channels?: number;
 }
 
+export interface MediaAttachment {
+  Codec?: string;
+  CodecTag?: string;
+  Comment?: string;
+  Index: number;
+  FileName?: string;
+  MimeType?: string;
+  DeliveryUrl?: string;
+}
+
 export interface MediaSourceInfo {
   Protocol?: string;
   Id: string;
@@ -122,6 +132,7 @@ export interface MediaSourceInfo {
   SupportsDirectPlay?: boolean;
   TranscodingUrl?: string;
   MediaStreams?: MediaStream[];
+  MediaAttachments?: MediaAttachment[];
   Bitrate?: number;
   DefaultAudioStreamIndex?: number;
   DefaultSubtitleStreamIndex?: number;

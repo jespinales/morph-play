@@ -3,6 +3,12 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  optimizeDeps: {
+    exclude: ['jassub'],
+  },
+  worker: {
+    format: 'es',
+  },
   server: {
     port: 5173,
     host: true,

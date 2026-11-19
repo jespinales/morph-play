@@ -4,6 +4,7 @@ import {
   Maximize,
   Minimize,
   Pause,
+  PictureInPicture2,
   Play,
   RotateCcw,
   RotateCw,
@@ -43,6 +44,8 @@ interface PlayerControlsProps {
   progressPercent: number;
   volume: number;
   isMuted: boolean;
+  supportsPiP: boolean;
+  isPiP: boolean;
   isFullscreen: boolean;
   playbackRate: number;
   openMenu: PlayerMenuKind;
@@ -109,6 +112,7 @@ interface PlayerControlsProps {
   onUploadSubtitleFile: (file: File) => void;
   onDeleteSubtitle: (index: number) => void;
   onSelectPlaybackRate: (rate: number) => void;
+  onTogglePiP: () => void;
   onToggleFullscreen: () => void;
 }
 
@@ -126,6 +130,8 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
   progressPercent,
   volume,
   isMuted,
+  supportsPiP,
+  isPiP,
   isFullscreen,
   playbackRate,
   openMenu,
@@ -192,6 +198,7 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
   onUploadSubtitleFile,
   onDeleteSubtitle,
   onSelectPlaybackRate,
+  onTogglePiP,
   onToggleFullscreen,
 }) => {
   const { t } = usePreferences();
@@ -505,6 +512,22 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
               onSyncPlayIgnoreWaitToggle={onSyncPlayIgnoreWaitToggle}
               onSyncPlayQueueStep={onSyncPlayQueueStep}
             />
+
+            {supportsPiP && (
+              <button
+                type="button"
+                onClick={onTogglePiP}
+                title={t.player.pipTitle}
+                aria-label={t.player.pipAria}
+                className={`p-2.5 rounded-lg transition-colors ${
+                  isPiP
+                    ? 'bg-white/20 text-[#7dd3fc]'
+                    : 'text-zinc-200 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <PictureInPicture2 className="w-5 h-5" />
+              </button>
+            )}
 
             <button
               type="button"

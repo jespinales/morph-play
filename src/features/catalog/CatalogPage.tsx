@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
+  ArrowUpDown,
   Bookmark,
+  Calendar,
   Film,
   FolderOpen,
   Layers,
@@ -10,11 +12,13 @@ import {
   Plus,
   Search,
   SlidersHorizontal,
+  Tag,
   Tv,
 } from 'lucide-react';
 import { useAuth } from '../../app/providers/AuthProvider';
 import { usePreferences } from '../../app/providers/PreferencesProvider';
 import { jellyfinApi } from '../../shared/api/jellyfin';
+import { FilterSelect } from '../../shared/components/FilterSelect';
 import { BaseItemDto } from '../../shared/types/jellyfin';
 import { MediaCard } from './components/MediaCard';
 import { CatalogMode, useCatalogQuery } from './hooks/useCatalogQuery';
@@ -321,108 +325,73 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
           )}
 
           {(availableLibraries.length > 1 || (mode === 'search' && availableLibraries.length > 0)) && (
-            <div className="relative flex items-center">
-              <FolderOpen className="w-4 h-4 text-zinc-400 absolute left-3 pointer-events-none" />
-              <select
-                id="catalog-library-filter"
-                name="libraryId"
-                value={selectedLibraryId}
-                onChange={(e) => setSelectedLibraryId(e.target.value)}
-                aria-label={t.catalog.filterLibraryAria}
-                className="bg-[#12131a] border border-white/10 rounded-xl pl-9 pr-3 py-2 min-h-[38px] text-xs sm:text-sm text-white focus:outline-none focus:border-[#00A4DC] cursor-pointer"
-              >
-                <option value="" className="bg-[#12131a]">
-                  {t.catalog.allLibraries}
-                </option>
-                {availableLibraries.map((lib) => (
-                  <option key={lib.Id} value={lib.Id} className="bg-[#12131a]">
-                    {lib.Name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <FilterSelect
+              id="catalog-library-filter"
+              value={selectedLibraryId}
+              onChange={setSelectedLibraryId}
+              ariaLabel={t.catalog.filterLibraryAria}
+              icon={<FolderOpen className="w-4 h-4" />}
+              options={[
+                { value: '', label: t.catalog.allLibraries },
+                ...availableLibraries.map((lib) => ({ value: lib.Id, label: lib.Name })),
+              ]}
+            />
           )}
 
           {availableGenres.length > 0 && mode !== 'collections' && mode !== 'playlists' && (
-            <div className="relative flex items-center">
-              <SlidersHorizontal className="w-4 h-4 text-zinc-400 absolute left-3 pointer-events-none" />
-              <select
-                id="catalog-genre-filter"
-                name="genre"
-                value={selectedGenre}
-                onChange={(e) => setSelectedGenre(e.target.value)}
-                aria-label={t.catalog.filterGenreAria}
-                className="bg-[#12131a] border border-white/10 rounded-xl pl-9 pr-3 py-2 min-h-[38px] text-xs sm:text-sm text-white focus:outline-none focus:border-[#00A4DC] cursor-pointer"
-              >
-                <option value="" className="bg-[#12131a]">
-                  {t.catalog.allGenres}
-                </option>
-                {availableGenres.map((genre) => (
-                  <option key={genre} value={genre} className="bg-[#12131a]">
-                    {genre}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <FilterSelect
+              id="catalog-genre-filter"
+              value={selectedGenre}
+              onChange={setSelectedGenre}
+              ariaLabel={t.catalog.filterGenreAria}
+              icon={<SlidersHorizontal className="w-4 h-4" />}
+              options={[
+                { value: '', label: t.catalog.allGenres },
+                ...availableGenres.map((genre) => ({ value: genre, label: genre })),
+              ]}
+            />
           )}
 
           {availableTags.length > 0 && mode !== 'collections' && mode !== 'playlists' && (
-            <select
+            <FilterSelect
               id="catalog-tag-filter"
-              name="tag"
               value={selectedTag}
-              onChange={(e) => setSelectedTag(e.target.value)}
-              aria-label={t.catalog.filterTagAria}
-              className="bg-[#12131a] border border-white/10 rounded-xl px-3 py-2 min-h-[38px] text-xs sm:text-sm text-white focus:outline-none focus:border-[#00A4DC] cursor-pointer"
-            >
-              <option value="" className="bg-[#12131a]">
-                {t.catalog.allTags}
-              </option>
-              {availableTags.map((tag) => (
-                <option key={tag} value={tag} className="bg-[#12131a]">
-                  {tag}
-                </option>
-              ))}
-            </select>
+              onChange={setSelectedTag}
+              ariaLabel={t.catalog.filterTagAria}
+              icon={<Tag className="w-4 h-4" />}
+              options={[
+                { value: '', label: t.catalog.allTags },
+                ...availableTags.map((tag) => ({ value: tag, label: tag })),
+              ]}
+            />
           )}
 
           {availableYears.length > 0 && mode !== 'collections' && mode !== 'playlists' && (
-            <select
+            <FilterSelect
               id="catalog-year-filter"
-              name="year"
-              value={selectedYear ?? ''}
-              onChange={(e) =>
-                setSelectedYear(e.target.value ? Number.parseInt(e.target.value, 10) : undefined)
+              value={selectedYear !== undefined ? String(selectedYear) : ''}
+              onChange={(val) =>
+                setSelectedYear(val ? Number.parseInt(val, 10) : undefined)
               }
-              aria-label={t.catalog.filterYearAria}
-              className="bg-[#12131a] border border-white/10 rounded-xl px-3 py-2 min-h-[38px] text-xs sm:text-sm text-white focus:outline-none focus:border-[#00A4DC] cursor-pointer"
-            >
-              <option value="" className="bg-[#12131a]">
-                {t.catalog.allYears}
-              </option>
-              {availableYears.map((yr) => (
-                <option key={yr} value={yr} className="bg-[#12131a]">
-                  {yr}
-                </option>
-              ))}
-            </select>
+              ariaLabel={t.catalog.filterYearAria}
+              icon={<Calendar className="w-4 h-4" />}
+              options={[
+                { value: '', label: t.catalog.allYears },
+                ...availableYears.map((yr) => ({ value: String(yr), label: String(yr) })),
+              ]}
+            />
           )}
 
           {mode !== 'playlists' && (
-            <select
+            <FilterSelect
               id="catalog-sort-order"
-              name="sortBy"
               value={sortBy}
-              onChange={(e) => handleSortChange(e.target.value)}
-              aria-label={t.catalog.sortCatalogAria}
-              className="bg-[#12131a] border border-white/10 rounded-xl px-3 py-2 min-h-[38px] text-xs sm:text-sm text-white focus:outline-none focus:border-[#00A4DC] cursor-pointer"
-            >
-              {sortOptions.map((opt) => (
-                <option key={opt.value} value={opt.value} className="bg-[#12131a]">
-                  {opt.label}
-                </option>
-              ))}
-            </select>
+              onChange={handleSortChange}
+              ariaLabel={t.catalog.sortCatalogAria}
+              icon={<ArrowUpDown className="w-4 h-4" />}
+              highlightActive={false}
+              options={sortOptions.map((opt) => ({ value: opt.value, label: opt.label }))}
+            />
           )}
         </div>
       </div>

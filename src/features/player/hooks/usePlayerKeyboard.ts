@@ -8,6 +8,7 @@ interface UsePlayerKeyboardParams {
   onClosePlayer: () => void;
   onTogglePlayPause: () => void;
   onSeekBy: (deltaSeconds: number) => void;
+  onTogglePiP?: () => void;
   onToggleFullscreen: () => void;
   onVolumeChange: (volume: number, muted: boolean) => void;
   onMuteToggle: (muted: boolean) => void;
@@ -21,6 +22,7 @@ export function usePlayerKeyboard({
   onClosePlayer,
   onTogglePlayPause,
   onSeekBy,
+  onTogglePiP,
   onToggleFullscreen,
   onVolumeChange,
   onMuteToggle,
@@ -71,6 +73,9 @@ export function usePlayerKeyboard({
           video.muted = !video.muted;
           onMuteToggle(video.muted);
           break;
+        case 'p':
+          onTogglePiP?.();
+          break;
         case 'f':
           onToggleFullscreen();
           break;
@@ -87,6 +92,7 @@ export function usePlayerKeyboard({
     onClosePlayer,
     onTogglePlayPause,
     onSeekBy,
+    onTogglePiP,
     onToggleFullscreen,
     onVolumeChange,
     onMuteToggle,

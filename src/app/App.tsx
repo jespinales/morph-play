@@ -5,8 +5,10 @@ import { ServerConnectPage } from '../features/auth/ServerConnectPage';
 import { CatalogPage } from '../features/catalog/CatalogPage';
 import { HomePage } from '../features/catalog/HomePage';
 import { DetailModal } from '../features/media-detail/DetailModal';
-import { PlayerRemoteHandlers, VideoPlayerModal } from '../features/player/VideoPlayerModal';
+import type { PlayerRemoteHandlers } from '../features/player/VideoPlayerModal';
 import { ProfileSettingsPage } from '../features/settings/ProfileSettingsPage';
+
+const VideoPlayerModal = React.lazy(() => import('../features/player/VideoPlayerModal'));
 import { jellyfinApi } from '../shared/api/jellyfin';
 import { JellyfinSocketClient } from '../shared/api/websocket';
 import { BrandLogo } from '../shared/components/BrandLogo';
@@ -334,14 +336,22 @@ const AppShell: React.FC = () => {
 
       {/* Fullscreen video player modal */}
       {playback && (
-        <VideoPlayerModal
-          item={playback.item}
-          episodeQueue={playback.episodeQueue}
-          onClose={() => setPlayback(null)}
-          onSyncProgress={handleSyncHomeProgress}
-          onProgressUpdated={() => setRefreshSignal((n) => n + 1)}
-          onRegisterRemoteHandlers={handleRegisterRemoteHandlers}
-        />
+        <React.Suspense
+          fallback={
+            <div className="fixed inset-0 z-[60] bg-black flex items-center justify-center">
+              <div className="w-10 h-10 rounded-full border-2 border-[#00A4DC] border-t-transparent animate-spin" />
+            </div>
+          }
+        >
+          <VideoPlayerModal
+            item={playback.item}
+            episodeQueue={playback.episodeQueue}
+            onClose={() => setPlayback(null)}
+            onSyncProgress={handleSyncHomeProgress}
+            onProgressUpdated={() => setRefreshSignal((n) => n + 1)}
+            onRegisterRemoteHandlers={handleRegisterRemoteHandlers}
+          />
+        </React.Suspense>
       )}
     </div>
   );

@@ -158,8 +158,9 @@ export interface PlayerSubtitleOption {
   index: number;
   label: string;
   language: string;
-  delivery: 'external' | 'encode';
+  delivery: 'external' | 'ass' | 'encode';
   src?: string;
+  fallbackVttSrc?: string;
   isDefault: boolean;
 }
 
@@ -182,6 +183,43 @@ export interface BuiltPlaybackStream {
 }
 
 const IMAGE_SUBTITLE_CODECS = new Set(['pgssub', 'pgs', 'dvdsub', 'dvbsub', 'vobsub', 'xsub']);
+const ASS_SUBTITLE_CODECS = new Set(['ass', 'ssa']);
+const FONT_MIME_HINTS = ['font', 'truetype', 'opentype', 'sfnt', 'woff'];
+
+/**
+ * Resolve URLs for font attachments bundled in a media source so client-side ASS renderers can load them.
+ */
+export function getSubtitleFontAttachments(
+  serverUrl: string,
+  itemId: string,
+  mediaSource: MediaSourceInfo,
+  token: string
+): string[] {
+  if (isDemoServer(serverUrl) || !token) return [];
+  const base = normalizeServerUrl(serverUrl);
+  if (!base) return [];
+
+  const urls: string[] = [];
+  for (const att of mediaSource.MediaAttachments ?? []) {
+    const mime = (att.MimeType ?? '').toLowerCase();
+    const file = (att.FileName ?? '').toLowerCase();
+    const codec = (att.Codec ?? '').toLowerCase();
+    const isFont =
+      FONT_MIME_HINTS.some((hint) => mime.includes(hint)) ||
+      /\.(ttf|otf|woff2?|ttc)$/i.test(file) ||
+      ['ttf', 'otf', 'woff', 'woff2'].includes(codec);
+    if (!isFont) continue;
+
+    if (att.DeliveryUrl) {
+      const resolved = att.DeliveryUrl.startsWith('/') ? `${base}${att.DeliveryUrl}` : `${base}/${att.DeliveryUrl}`;
+      urls.push(resolved.includes('api_key=') ? resolved : `${resolved}${resolved.includes('?') ? '&' : '?'}api_key=${encodeURIComponent(token)}`);
+    } else {
+      const url = getAttachmentUrl(serverUrl, itemId, mediaSource.Id, att.Index, token);
+      if (url) urls.push(url);
+    }
+  }
+  return urls;
+}
 
 export function buildPlaybackStream(
   serverUrl: string,
@@ -209,19 +247,32 @@ export function buildPlaybackStream(
     .filter((s) => s.Type === 'Subtitle')
     .map((s) => {
       const codec = (s.Codec ?? '').toLowerCase();
-      const canServeTextVtt =
+      const isAss = ASS_SUBTITLE_CODECS.has(codec);
+      const canServeExternal =
         !IMAGE_SUBTITLE_CODECS.has(codec) &&
         (Boolean(s.SupportsExternalStream) ||
           Boolean(s.IsExternal) ||
+          isAss ||
           codec === 'subrip' ||
           codec === 'srt' ||
           codec === 'vtt');
+      if (isAss && canServeExternal) {
+        return {
+          index: s.Index,
+          label: s.DisplayTitle || s.Title || s.Language || `Subtitle ${s.Index}`,
+          language: s.Language || 'en',
+          delivery: 'ass' as const,
+          src: `${base}/Videos/${itemId}/${mediaSource.Id}/Subtitles/${s.Index}/0/Stream.${codec}?api_key=${encodeURIComponent(token)}`,
+          fallbackVttSrc: `${base}/Videos/${itemId}/${mediaSource.Id}/Subtitles/${s.Index}/0/Stream.vtt?api_key=${encodeURIComponent(token)}`,
+          isDefault: Boolean(s.IsDefault),
+        };
+      }
       return {
         index: s.Index,
         label: s.DisplayTitle || s.Title || s.Language || `Subtitle ${s.Index}`,
         language: s.Language || 'en',
-        delivery: canServeTextVtt ? ('external' as const) : ('encode' as const),
-        src: canServeTextVtt
+        delivery: canServeExternal ? ('external' as const) : ('encode' as const),
+        src: canServeExternal
           ? `${base}/Videos/${itemId}/${mediaSource.Id}/Subtitles/${s.Index}/0/Stream.vtt?api_key=${encodeURIComponent(token)}`
           : undefined,
         isDefault: Boolean(s.IsDefault),
@@ -229,12 +280,15 @@ export function buildPlaybackStream(
     });
 
   const subtitleTracks = allSubtitles
-    .filter((s): s is PlayerSubtitleOption & { src: string } => s.delivery === 'external' && Boolean(s.src))
-    .map(({ index, label, language, src, isDefault }) => ({
+    .filter(
+      (s): s is PlayerSubtitleOption & { src: string } =>
+        (s.delivery === 'external' || s.delivery === 'ass') && Boolean(s.src)
+    )
+    .map(({ index, label, language, src, fallbackVttSrc, isDefault }) => ({
       index,
       label,
       language,
-      src,
+      src: fallbackVttSrc ?? src,
       isDefault,
     }));
 

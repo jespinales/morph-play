@@ -41,10 +41,12 @@ export function useMediaDetail({
   const [playlistMeta, setPlaylistMeta] = useState<PlaylistDto | null>(null);
   const [playlistUsers, setPlaylistUsers] = useState<PlaylistUserPermissions[]>([]);
   const [publicUsers, setPublicUsers] = useState<UserDto[]>([]);
+  const [loadingDetail, setLoadingDetail] = useState(true);
   const [loadingEpisodes, setLoadingEpisodes] = useState(false);
 
   useEffect(() => {
     let active = true;
+    setLoadingDetail(true);
     setDetail(item);
     setSeasons([]);
     setEpisodes([]);
@@ -62,7 +64,10 @@ export function useMediaDetail({
     setPlaylistUsers([]);
 
     async function load() {
-      if (!serverUrl || !accessToken || !userId) return;
+      if (!serverUrl || !accessToken || !userId) {
+        if (active) setLoadingDetail(false);
+        return;
+      }
       try {
         const isPerson = item.Type === 'Person';
         const isBoxSet = item.Type === 'BoxSet';
@@ -107,15 +112,15 @@ export function useMediaDetail({
             : jellyfinApi.getThemeMedia(serverUrl, accessToken, userId, item.Id),
         ]);
         if (!active) return;
-        setDetail(fullDetail);
-        setSimilar(sim);
-        setTrailers(localTrailers);
-        setSpecialFeatures(extras);
-        setExternalIds(extIds);
-        setItemCollections(cols);
-        setAncestors(ancList);
-        setAdditionalParts(parts);
-        setThemeSongs(themes.ThemeSongsResult?.Items ?? []);
+
+        let nextSeasons: BaseItemDto[] = [];
+        let nextSelectedSeasonId = '';
+        let nextEpisodes: BaseItemDto[] = [];
+        let nextCollectionItems: BaseItemDto[] = [];
+        let nextPersonCredits: BaseItemDto[] = [];
+        let nextPlaylistMeta: PlaylistDto | null = null;
+        let nextPlaylistUsers: PlaylistUserPermissions[] = [];
+        let nextPublicUsers: UserDto[] = [];
 
         if (fullDetail.Type === 'Person') {
           const credits = await jellyfinApi.getItems(serverUrl, accessToken, userId, {
@@ -125,35 +130,27 @@ export function useMediaDetail({
             sortOrder: 'Descending',
             limit: 60,
           });
-          if (!active) return;
-          setPersonCredits(credits.Items);
+          nextPersonCredits = credits.Items;
         } else if (fullDetail.Type === 'Series') {
-          setLoadingEpisodes(true);
-          const sList = await jellyfinApi.getSeasons(serverUrl, accessToken, userId, fullDetail.Id);
-          if (!active) return;
-          setSeasons(sList);
-          const firstSeason = sList[0];
+          nextSeasons = await jellyfinApi.getSeasons(serverUrl, accessToken, userId, fullDetail.Id);
+          const firstSeason = nextSeasons[0];
           if (firstSeason) {
-            setSelectedSeasonId(firstSeason.Id);
-            const eps = await jellyfinApi.getEpisodes(
+            nextSelectedSeasonId = firstSeason.Id;
+            nextEpisodes = await jellyfinApi.getEpisodes(
               serverUrl,
               accessToken,
               userId,
               fullDetail.Id,
               firstSeason.Id
             );
-            if (!active) return;
-            setEpisodes(eps);
           }
-          setLoadingEpisodes(false);
         } else if (fullDetail.Type === 'BoxSet') {
           const children = await jellyfinApi.getItems(serverUrl, accessToken, userId, {
             parentId: fullDetail.Id,
             sortBy: 'ProductionYear',
             sortOrder: 'Ascending',
           });
-          if (!active) return;
-          setCollectionItems(children.Items);
+          nextCollectionItems = children.Items;
         } else if (fullDetail.Type === 'Playlist') {
           const [entries, plMeta, plUsers, pubUsers] = await Promise.all([
             jellyfinApi.getPlaylistItems(serverUrl, accessToken, userId, fullDetail.Id),
@@ -161,14 +158,39 @@ export function useMediaDetail({
             jellyfinApi.getPlaylistUsers(serverUrl, accessToken, fullDetail.Id),
             jellyfinApi.getPublicUsers(serverUrl).catch(() => []),
           ]);
-          if (!active) return;
-          setCollectionItems(entries);
-          setPlaylistMeta(plMeta);
-          setPlaylistUsers(plUsers);
-          setPublicUsers(pubUsers);
+          nextCollectionItems = entries;
+          nextPlaylistMeta = plMeta;
+          nextPlaylistUsers = plUsers;
+          nextPublicUsers = pubUsers;
         }
+
+        if (!active) return;
+
+        // Commit all hydrated detail state together to avoid incremental height jumps
+        setDetail(fullDetail);
+        setSimilar(sim);
+        setTrailers(localTrailers);
+        setSpecialFeatures(extras);
+        setExternalIds(extIds);
+        setItemCollections(cols);
+        setAncestors(ancList);
+        setAdditionalParts(parts);
+        setThemeSongs(themes.ThemeSongsResult?.Items ?? []);
+        setSeasons(nextSeasons);
+        setSelectedSeasonId(nextSelectedSeasonId);
+        setEpisodes(nextEpisodes);
+        setCollectionItems(nextCollectionItems);
+        setPersonCredits(nextPersonCredits);
+        setPlaylistMeta(nextPlaylistMeta);
+        setPlaylistUsers(nextPlaylistUsers);
+        setPublicUsers(nextPublicUsers);
       } catch {
-        setLoadingEpisodes(false);
+        // Keep fallback summary item visible if detail fetch fails
+      } finally {
+        if (active) {
+          setLoadingDetail(false);
+          setLoadingEpisodes(false);
+        }
       }
     }
 
@@ -308,6 +330,7 @@ export function useMediaDetail({
     playlistMeta,
     playlistUsers,
     publicUsers,
+    loadingDetail,
     loadingEpisodes,
     handleSeasonChange,
     handleToggleFavorite,

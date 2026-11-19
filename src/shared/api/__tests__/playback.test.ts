@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { DEMO_SERVER_URL } from '../demo/demoData';
-import { buildPlaybackStream, getChapterImageUrl, getUserAvatarUrl } from '../playback';
+import {
+  buildPlaybackStream,
+  getChapterImageUrl,
+  getSubtitleFontAttachments,
+  getUserAvatarUrl,
+} from '../playback';
 import { MediaSourceInfo } from '../../types/jellyfin';
 
 describe('playback stream builder', () => {
@@ -65,5 +70,37 @@ describe('playback stream builder', () => {
     expect(getUserAvatarUrl('https://jf.test', { Id: 'u1', Name: 'Alice', PrimaryImageTag: 'ava1' })).toBe(
       'https://jf.test/UserImage?userId=u1&tag=ava1'
     );
+  });
+
+  it('delivers ASS/SSA subtitles for client-side JASSUB rendering without forcing transcode burn-in', () => {
+    const assSource: MediaSourceInfo = {
+      Id: 'src-ass',
+      Container: 'mp4',
+      SupportsDirectPlay: true,
+      DefaultAudioStreamIndex: 1,
+      MediaStreams: [
+        { Type: 'Video', Index: 0, Codec: 'h264' },
+        { Type: 'Audio', Index: 1, Codec: 'aac', Language: 'jpn' },
+        { Type: 'Subtitle', Index: 2, Codec: 'ass', Language: 'spa', SupportsExternalStream: true },
+      ],
+      MediaAttachments: [
+        { Index: 3, FileName: 'CustomFont.ttf', MimeType: 'font/ttf' },
+        { Index: 4, FileName: 'cover.jpg', MimeType: 'image/jpeg' },
+      ],
+    };
+
+    const stream = buildPlaybackStream('https://jf.test', 'tok', 'item-2', assSource, 'sess-3', 1, 'auto', 2);
+    expect(stream.playMethod).toBe('DirectPlay');
+    expect(stream.encodedSubtitleIndex).toBeUndefined();
+    expect(stream.allSubtitles[0]).toMatchObject({
+      index: 2,
+      delivery: 'ass',
+      src: 'https://jf.test/Videos/item-2/src-ass/Subtitles/2/0/Stream.ass?api_key=tok',
+      fallbackVttSrc: 'https://jf.test/Videos/item-2/src-ass/Subtitles/2/0/Stream.vtt?api_key=tok',
+    });
+
+    expect(getSubtitleFontAttachments('https://jf.test', 'item-2', assSource, 'tok')).toEqual([
+      'https://jf.test/Videos/item-2/src-ass/Attachments/3?api_key=tok',
+    ]);
   });
 });

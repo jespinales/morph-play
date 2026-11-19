@@ -343,6 +343,8 @@ export interface TranslationDictionary {
     subtitlesOff: string;
     noExternalSubtitles: string;
     playbackSpeedAria: string;
+    pipTitle: string;
+    pipAria: string;
     fullscreenTitle: string;
     fullscreenAria: string;
     resumePromptTitle: string;
@@ -721,6 +723,8 @@ const en: TranslationDictionary = {
     subtitlesOff: 'Off',
     noExternalSubtitles: 'No external subtitles available',
     playbackSpeedAria: 'Playback speed',
+    pipTitle: 'Picture-in-Picture (P)',
+    pipAria: 'Toggle Picture-in-Picture',
     fullscreenTitle: 'Fullscreen (F)',
     fullscreenAria: 'Toggle fullscreen',
     resumePromptTitle: 'Resume playback?',
@@ -1100,6 +1104,8 @@ const es: TranslationDictionary = {
     subtitlesOff: 'Desactivados',
     noExternalSubtitles: 'Sin subtítulos externos disponibles',
     playbackSpeedAria: 'Velocidad de reproducción',
+    pipTitle: 'Imagen en imagen (P)',
+    pipAria: 'Alternar imagen en imagen',
     fullscreenTitle: 'Pantalla completa (F)',
     fullscreenAria: 'Alternar pantalla completa',
     resumePromptTitle: '¿Cómo quieres reproducirlo?',

@@ -89,6 +89,7 @@ export const DetailModal: React.FC<DetailModalProps> = ({
     playlistMeta,
     playlistUsers,
     publicUsers,
+    loadingDetail,
     loadingEpisodes,
     handleSeasonChange,
     handleToggleFavorite,
@@ -288,7 +289,7 @@ export const DetailModal: React.FC<DetailModalProps> = ({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-5xl rounded-2xl overflow-hidden bg-[#12131a] border border-white/15 shadow-[0_25px_90px_rgba(0,0,0,0.9)] animate-scaleIn my-auto"
+        className="relative w-full max-w-5xl min-h-[82vh] rounded-2xl overflow-hidden bg-[#12131a] border border-white/15 shadow-[0_25px_90px_rgba(0,0,0,0.9)] animate-fadeIn"
       >
         {/* Close button */}
         <button
@@ -567,8 +568,27 @@ export const DetailModal: React.FC<DetailModalProps> = ({
         </div>
 
         {/* Metadata, episodes, cast, and similar titles body */}
-        <div className="p-5 sm:p-8 space-y-8">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="p-5 sm:p-8 space-y-8 min-h-[420px]">
+          {loadingDetail ? (
+            <div className="space-y-6 animate-pulse" aria-hidden="true">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 space-y-3">
+                  <div className="h-5 w-48 rounded bg-white/10" />
+                  <div className="h-4 w-full rounded bg-white/10" />
+                  <div className="h-4 w-5/6 rounded bg-white/10" />
+                  <div className="h-4 w-2/3 rounded bg-white/10" />
+                </div>
+                <div className="h-32 rounded-xl bg-white/5 border border-white/10" />
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-white/10">
+                {[1, 2, 3, 4].map((slot) => (
+                  <div key={slot} className="aspect-video rounded-xl bg-white/5" />
+                ))}
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className={`${isPerson ? 'lg:col-span-3' : 'lg:col-span-2'} space-y-4`}>
               {/* Badges row */}
               <div className="flex flex-wrap items-center gap-2.5 text-sm text-zinc-300">
@@ -1271,6 +1291,8 @@ export const DetailModal: React.FC<DetailModalProps> = ({
                 })}
               </div>
             </section>
+          )}
+            </>
           )}
         </div>
       </div>
