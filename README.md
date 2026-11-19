@@ -28,7 +28,7 @@ Incluye identidad visual neutra de fábrica y permite personalizar libremente el
 
 ## Compatibilidad con la API de Jellyfin
 
-MorphPlay implementa la integración con el servidor basándose en la especificación oficial publicada en [api.jellyfin.org](https://api.jellyfin.org/), tomando como referencia **Jellyfin Server 10.10+** (necesario para `MediaSegments` y `Trickplay`; el resto de capacidades degradan con compatibilidad en versiones previas):
+MorphPlay implementa la integración con el servidor basándose en la especificación oficial **Jellyfin API `12.4.0`** publicada en [api.jellyfin.org](https://api.jellyfin.org/) (manteniendo compatibilidad con servidores Jellyfin `10.10+` para funciones como `MediaSegments` y `Trickplay`):
 
 - **Autenticación, usuarios y dispositivos**: Información pública del servidor (`/System/Info/Public`), usuarios públicos, login por credenciales, flujo completo de **Quick Connect** (`Enabled`, `Initiate`, `Connect`, `Authorize`, `AuthenticateWithQuickConnect`), cierre de sesión (`/Sessions/Logout`) y sincronización de configuración de usuario (`/Users/{id}/Configuration`).
 - **Catálogo, descubrimiento y playlists**: Vistas de biblioteca (`/Users/{id}/Views`), elementos para reanudar (`/Users/{id}/Items/Resume`), próximos episodios (`/Shows/NextUp`), recientes (`/Users/{id}/Items/Latest`), sugerencias (`/Items/Suggestions`), consultas paginadas y géneros (`/Users/{id}/Items`, `/Genres`), búsqueda rápida (`/Search/Hints`), temporadas/episodios/similares, tráilers locales (`LocalTrailers`), extras (`SpecialFeatures`), favoritos, estado visto y CRUD completo de listas (`/Playlists`).

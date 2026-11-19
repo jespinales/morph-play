@@ -27,8 +27,8 @@ Run `npm test` and `npm run build` after code changes.
 - Validate custom logo URLs with `isSafeLogoUrl`; keep brand editing restricted to Jellyfin administrators (`Policy?.IsAdministrator`).
 - Keep `.env` and local files in `brand/` untracked.
 
-## Jellyfin API Support (10.10+ Target)
-- **Reference Spec**: Official OpenAPI documentation at `https://api.jellyfin.org/` targeting **Jellyfin Server 10.10+** (`MediaSegments` and `Trickplay` require `10.10+`; core catalog/playback degrades gracefully on older servers).
+## Jellyfin API Support (OpenAPI 12.4.0 Spec)
+- **Reference Spec**: Official **Jellyfin API `12.4.0`** OpenAPI documentation at `https://api.jellyfin.org/` (compatible with Jellyfin Server `10.10+` for `MediaSegments` and `Trickplay`; core catalog/playback degrades gracefully on older servers).
 - **Implemented API Surface (`src/shared/api/`)**:
   - **Auth & Users** (`jellyfin.ts`): `/System/Info/Public`, `/Users/Public`, `/Users/AuthenticateByName`, `/Sessions/Logout`, `/QuickConnect/*` + `/Users/AuthenticateWithQuickConnect`, `/Users/{id}` and `/Users/{id}/Configuration`.
   - **Catalog, Discovery & Playlists** (`jellyfin.ts`): `/Users/{id}/Views`, `/Users/{id}/Items/Resume` (deduplicated to 1 most recently played episode per series), `/Shows/NextUp`, `/Users/{id}/Items/Latest`, paginated `/Users/{id}/Items`, `/Genres`, `/Items/Suggestions`, `/Search/Hints`, `/Shows/{id}/Seasons`, `/Shows/{id}/Episodes`, `/Items/{id}/Similar`, `LocalTrailers`, `SpecialFeatures`, `FavoriteItems`, `PlayedItems`, `/UserItems/{id}/UserData`, and `/Playlists/*`.
