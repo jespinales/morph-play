@@ -16,6 +16,7 @@ import { getTrickplayFrame, selectTrickplayInfo, TrickplaySelection } from '../.
 import { NextEpisodeCard } from './components/NextEpisodeCard';
 import { PlayerControls } from './components/PlayerControls';
 import { PlayerEndScreen } from './components/PlayerEndScreen';
+import { ResumePromptOverlay } from './components/ResumePromptOverlay';
 import { PlayerMenuKind } from './components/TrackMenus';
 import { useEpisodeQueue } from './hooks/useEpisodeQueue';
 import { usePlayerKeyboard } from './hooks/usePlayerKeyboard';
@@ -25,6 +26,7 @@ interface VideoPlayerModalProps {
   item: BaseItemDto;
   episodeQueue?: BaseItemDto[];
   onClose: () => void;
+  onSyncProgress?: () => Promise<void>;
   onProgressUpdated?: () => void;
 }
 
@@ -32,6 +34,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   item,
   episodeQueue,
   onClose,
+  onSyncProgress,
   onProgressUpdated,
 }) => {
   const { serverUrl, accessToken, user } = useAuth();
@@ -51,6 +54,8 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   const isClosingRef = useRef<boolean>(false);
   const pendingSeekTargetRef = useRef<number | null>(null);
   const seekFeedbackTimerRef = useRef<number | null>(null);
+  const seekSyncTimerRef = useRef<number | null>(null);
+  const ignoreNextSeekSyncRef = useRef<boolean>(false);
   const menusContainerRef = useRef<HTMLDivElement>(null);
   const lastPointerTypeRef = useRef<string>('mouse');
   const suppressNextVideoClickRef = useRef<boolean>(false);
@@ -87,6 +92,16 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   const [seekPreview, setSeekPreview] = useState<{ time: number; percent: number } | null>(null);
   const [failedTiles, setFailedTiles] = useState<Record<string, boolean>>({});
   const [seekFeedback, setSeekFeedback] = useState<{ delta: number; key: number } | null>(null);
+  const [resumeDecision, setResumeDecision] = useState<{
+    itemId: string;
+    startTicks: number;
+  } | null>(null);
+  const [resumePrompt, setResumePrompt] = useState<{
+    item: BaseItemDto;
+    resumeTicks: number;
+    resumeSeconds: number;
+    durationSeconds: number;
+  } | null>(null);
 
   useEffect(() => {
     setRootItem(item);
@@ -137,7 +152,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     }, 3200);
   }, [openMenu]);
 
-  // Load PlaybackInfo + MediaSegments whenever activeItem changes
+  // Load PlaybackInfo + MediaSegments whenever activeItem or resumeDecision changes
   useEffect(() => {
     let active = true;
     if (!serverUrl || !accessToken || !user || activeItem.Type === 'Series') return;
@@ -145,6 +160,8 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     async function loadPlayback() {
       setLoadingStream(true);
       setBuiltStream(null);
+      setMediaSource(null);
+      setResumePrompt(null);
       setStreamError(null);
       setOpenMenu(null);
       setAutoSkippedId(null);
@@ -156,14 +173,55 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
       setFailedTiles({});
 
       try {
+        let resolvedDetail: BaseItemDto | null = null;
+        let effectiveStartTicks = 0;
+
+        if (resumeDecision?.itemId === activeItem.Id) {
+          effectiveStartTicks = resumeDecision.startTicks;
+        } else {
+          const inlineTicks = activeItem.UserData?.PlaybackPositionTicks ?? 0;
+          const inlineSeconds = resolveResumeStartSeconds(inlineTicks, activeItem.RunTimeTicks);
+          if (inlineSeconds > 0) {
+            setResumePrompt({
+              item: activeItem,
+              resumeTicks: inlineTicks,
+              resumeSeconds: inlineSeconds,
+              durationSeconds: ticksToSeconds(activeItem.RunTimeTicks),
+            });
+            setLoadingStream(false);
+            return;
+          }
+
+          resolvedDetail = await jellyfinApi
+            .getItemDetail(serverUrl, accessToken!, user!.Id, activeItem.Id)
+            .catch(() => null);
+          if (!active) return;
+
+          const detailTicks = resolvedDetail?.UserData?.PlaybackPositionTicks ?? 0;
+          const runtimeTicks = resolvedDetail?.RunTimeTicks ?? activeItem.RunTimeTicks;
+          const detailSeconds = resolveResumeStartSeconds(detailTicks, runtimeTicks);
+          if (detailSeconds > 0) {
+            setResumePrompt({
+              item: resolvedDetail ?? activeItem,
+              resumeTicks: detailTicks,
+              resumeSeconds: detailSeconds,
+              durationSeconds: ticksToSeconds(runtimeTicks),
+            });
+            setLoadingStream(false);
+            return;
+          }
+        }
+
         const similarTargetId = activeItem.SeriesId || activeItem.Id;
         const [playbackInfo, itemSegments, itemDetail, related] = await Promise.all([
           jellyfinApi.getPlaybackInfo(serverUrl, accessToken!, user!.Id, activeItem.Id, {
             maxStreamingBitrate: qualityToBitrate(preferences.quality),
-            startTimeTicks: activeItem.UserData?.PlaybackPositionTicks ?? 0,
+            startTimeTicks: effectiveStartTicks,
           }),
           jellyfinApi.getMediaSegments(serverUrl, accessToken!, activeItem.Id),
-          jellyfinApi.getItemDetail(serverUrl, accessToken!, user!.Id, activeItem.Id).catch(() => null),
+          resolvedDetail
+            ? Promise.resolve(resolvedDetail)
+            : jellyfinApi.getItemDetail(serverUrl, accessToken!, user!.Id, activeItem.Id).catch(() => null),
           jellyfinApi.getSimilarItems(serverUrl, accessToken!, user!.Id, similarTargetId, 6).catch(() => []),
         ]);
 
@@ -188,13 +246,10 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
             : subtitles.find((s) => s.Language?.toLowerCase() === preferences.preferredSubtitleLang) ??
               subtitles.find((s) => s.Index === source.DefaultSubtitleStreamIndex);
 
-        const resumeTicks =
-          itemDetail?.UserData?.PlaybackPositionTicks ??
-          activeItem.UserData?.PlaybackPositionTicks ??
-          0;
         const runtimeTicks =
           source.RunTimeTicks ?? itemDetail?.RunTimeTicks ?? activeItem.RunTimeTicks;
-        const startSeconds = resolveResumeStartSeconds(resumeTicks, runtimeTicks);
+        const startSeconds =
+          effectiveStartTicks > 0 ? resolveResumeStartSeconds(effectiveStartTicks, runtimeTicks) : 0;
         const totalDuration = ticksToSeconds(runtimeTicks);
 
         const stream: BuiltPlaybackStream = {
@@ -227,7 +282,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           ItemId: activeItem.Id,
           MediaSourceId: source.Id,
           PlaySessionId: playbackInfo.PlaySessionId,
-          PositionTicks: resumeTicks,
+          PositionTicks: effectiveStartTicks,
           AudioStreamIndex: preferredAudio?.Index,
           SubtitleStreamIndex: preferredSub?.Index,
           PlayMethod: stream.playMethod,
@@ -245,7 +300,16 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     return () => {
       active = false;
     };
-  }, [activeItem, serverUrl, accessToken, user, preferences.quality, preferences.preferredAudioLang, preferences.preferredSubtitleLang]);
+  }, [
+    activeItem,
+    resumeDecision,
+    serverUrl,
+    accessToken,
+    user,
+    preferences.quality,
+    preferences.preferredAudioLang,
+    preferences.preferredSubtitleLang,
+  ]);
 
   // Attach HLS or direct stream to the <video> element
   useEffect(() => {
@@ -253,6 +317,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     if (!video || !builtStream) return;
 
     lastTimeUpdateRef.current = -1;
+    ignoreNextSeekSyncRef.current = false;
     setIsBuffering(true);
 
     if (hlsRef.current) {
@@ -276,6 +341,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
       // Wait for HAVE_METADATA so setting currentTime persists across MSE/native initialization
       if (video.readyState < 1) return;
       if (Math.abs(video.currentTime - startSeconds) > 2) {
+        ignoreNextSeekSyncRef.current = true;
         video.currentTime = startSeconds;
         setCurrentTime(startSeconds);
       }
@@ -342,6 +408,10 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         window.clearTimeout(seekFeedbackTimerRef.current);
         seekFeedbackTimerRef.current = null;
       }
+      if (seekSyncTimerRef.current) {
+        window.clearTimeout(seekSyncTimerRef.current);
+        seekSyncTimerRef.current = null;
+      }
       if (bufferingTimerRef.current) {
         window.clearTimeout(bufferingTimerRef.current);
         bufferingTimerRef.current = null;
@@ -353,27 +423,51 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     };
   }, [builtStream, activeItem.Id]);
 
-  // Report playback progress every 10s
-  useEffect(() => {
-    if (!serverUrl || !accessToken || !mediaSource || !builtStream) return;
-
-    progressTimer.current = window.setInterval(() => {
+  const syncPlaybackProgress = useCallback(
+    async (paused: boolean, refreshHomeAfter: boolean) => {
       const video = videoRef.current;
-      if (!video || video.paused) return;
+      if (!video || !serverUrl || !accessToken || !mediaSource || !builtStream || isClosingRef.current) {
+        return;
+      }
       const ticks = secondsToTicks(video.currentTime);
       lastReportedTicksRef.current = ticks;
-      jellyfinApi.reportPlaybackProgress(serverUrl, accessToken, {
+      await jellyfinApi.reportPlaybackProgress(serverUrl, accessToken, {
         ItemId: activeItem.Id,
         MediaSourceId: mediaSource.Id,
         PlaySessionId: playSessionId,
         PositionTicks: ticks,
-        IsPaused: false,
+        IsPaused: paused,
         IsMuted: video.muted,
         VolumeLevel: Math.round(video.volume * 100),
         AudioStreamIndex: selectedAudioIndex,
         SubtitleStreamIndex: selectedSubtitleIndex === -1 ? undefined : selectedSubtitleIndex,
         PlayMethod: builtStream.playMethod,
       });
+      if (refreshHomeAfter && !isClosingRef.current) {
+        void onSyncProgress?.();
+      }
+    },
+    [
+      serverUrl,
+      accessToken,
+      mediaSource,
+      builtStream,
+      activeItem.Id,
+      playSessionId,
+      selectedAudioIndex,
+      selectedSubtitleIndex,
+      onSyncProgress,
+    ]
+  );
+
+  // Report playback progress every 10s and keep Home resume/next-up rows updated in the background
+  useEffect(() => {
+    if (!serverUrl || !accessToken || !mediaSource || !builtStream) return;
+
+    progressTimer.current = window.setInterval(() => {
+      const video = videoRef.current;
+      if (!video || video.paused) return;
+      void syncPlaybackProgress(false, true);
     }, 10000);
 
     return () => {
@@ -381,20 +475,19 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         window.clearInterval(progressTimer.current);
       }
     };
-  }, [
-    serverUrl,
-    accessToken,
-    mediaSource,
-    builtStream,
-    activeItem.Id,
-    playSessionId,
-    selectedAudioIndex,
-    selectedSubtitleIndex,
-  ]);
+  }, [serverUrl, accessToken, mediaSource, builtStream, syncPlaybackProgress]);
 
-  const handleClosePlayer = useCallback(() => {
+  const handleClosePlayer = useCallback(async () => {
     if (isClosingRef.current) return;
     isClosingRef.current = true;
+
+    if (resumePrompt || !mediaSource) {
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+      }
+      onClose();
+      return;
+    }
 
     const video = videoRef.current;
     const fallbackStartSeconds = builtStream?.startSeconds ?? 0;
@@ -415,28 +508,50 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
       window.clearInterval(progressTimer.current);
       progressTimer.current = null;
     }
+    if (seekSyncTimerRef.current) {
+      window.clearTimeout(seekSyncTimerRef.current);
+      seekSyncTimerRef.current = null;
+    }
     if (document.fullscreenElement) {
       document.exitFullscreen().catch(() => {});
     }
 
-    onClose();
+    const syncBeforeClose = (async () => {
+      if (serverUrl && accessToken && mediaSource) {
+        await jellyfinApi
+          .reportPlaybackStopped(serverUrl, accessToken, {
+            ItemId: activeItem.Id,
+            MediaSourceId: mediaSource.Id,
+            PlaySessionId: playSessionId,
+            PositionTicks: finalTicks,
+          })
+          .catch(() => {});
+      }
+      await onSyncProgress?.().catch(() => {});
+    })();
 
-    if (serverUrl && accessToken && mediaSource) {
-      void jellyfinApi
-        .reportPlaybackStopped(serverUrl, accessToken, {
-          ItemId: activeItem.Id,
-          MediaSourceId: mediaSource.Id,
-          PlaySessionId: playSessionId,
-          PositionTicks: finalTicks,
-        })
-        .catch(() => {})
-        .finally(() => {
-          onProgressUpdated?.();
-        });
-    } else {
+    // Wait briefly so Home rows update before closing the overlay (capped to avoid UI lag)
+    await Promise.race([
+      syncBeforeClose,
+      new Promise<void>((resolve) => window.setTimeout(resolve, 400)),
+    ]);
+
+    onClose();
+    void syncBeforeClose.finally(() => {
       onProgressUpdated?.();
-    }
-  }, [serverUrl, accessToken, mediaSource, activeItem.Id, playSessionId, builtStream?.startSeconds, onProgressUpdated, onClose]);
+    });
+  }, [
+    serverUrl,
+    accessToken,
+    mediaSource,
+    activeItem.Id,
+    playSessionId,
+    builtStream?.startSeconds,
+    resumePrompt,
+    onSyncProgress,
+    onProgressUpdated,
+    onClose,
+  ]);
 
   const togglePlayPause = useCallback(() => {
     const video = videoRef.current;
@@ -524,6 +639,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   usePlayerKeyboard({
     videoRef,
     hasOpenMenu: Boolean(openMenu),
+    suspendPlaybackShortcuts: Boolean(resumePrompt),
     onCloseMenu: () => setOpenMenu(null),
     onClosePlayer: handleClosePlayer,
     onTogglePlayPause: togglePlayPause,
@@ -708,7 +824,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         }
       }}
       className={`fixed inset-0 z-[60] overflow-hidden bg-black select-none ${
-        showControls ? 'cursor-default' : 'cursor-none'
+        showControls || resumePrompt ? 'cursor-default' : 'cursor-none'
       }`}
     >
       {/* HTML5 video element */}
@@ -741,9 +857,12 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           setIsPlaying(true);
           clearBuffering();
         }}
-        onPause={() => {
+        onPause={(e) => {
           setIsPlaying(false);
           clearBuffering();
+          if (!isClosingRef.current && e.currentTarget.readyState >= 1) {
+            void syncPlaybackProgress(true, true);
+          }
         }}
         onWaiting={(e) => {
           if (!e.currentTarget.paused) scheduleBuffering();
@@ -755,6 +874,21 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         onSeeked={() => {
           pendingSeekTargetRef.current = null;
           clearBuffering();
+          if (ignoreNextSeekSyncRef.current) {
+            ignoreNextSeekSyncRef.current = false;
+            return;
+          }
+          if (isClosingRef.current) return;
+          if (seekSyncTimerRef.current) {
+            window.clearTimeout(seekSyncTimerRef.current);
+          }
+          seekSyncTimerRef.current = window.setTimeout(() => {
+            seekSyncTimerRef.current = null;
+            const vid = videoRef.current;
+            if (vid) {
+              void syncPlaybackProgress(vid.paused, true);
+            }
+          }, 350);
         }}
         onCanPlay={clearBuffering}
         onCanPlayThrough={clearBuffering}
@@ -850,13 +984,40 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
       )}
 
       {/* Loading / buffering spinner */}
-      {(loadingStream || isBuffering) && !streamError && (
+      {(loadingStream || isBuffering) && !streamError && !resumePrompt && (
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none gap-3">
           <Loader2 className="w-12 h-12 text-[#00A4DC] animate-spin" />
           {loadingStream && (
             <p className="text-sm text-zinc-300 font-medium">{t.player.preparing}</p>
           )}
         </div>
+      )}
+
+      {/* Resume vs start over prompt */}
+      {resumePrompt && !streamError && (
+        <ResumePromptOverlay
+          serverUrl={serverUrl}
+          item={resumePrompt.item}
+          titleDisplay={titleDisplay}
+          subtitleDisplay={subtitleDisplay}
+          resumeSeconds={resumePrompt.resumeSeconds}
+          durationSeconds={resumePrompt.durationSeconds}
+          onResume={() => {
+            setResumePrompt(null);
+            setResumeDecision({
+              itemId: activeItem.Id,
+              startTicks: resumePrompt.resumeTicks,
+            });
+          }}
+          onStartFromBeginning={() => {
+            setResumePrompt(null);
+            setResumeDecision({
+              itemId: activeItem.Id,
+              startTicks: 0,
+            });
+          }}
+          onCancel={handleClosePlayer}
+        />
       )}
 
       {/* Stream error screen */}
@@ -919,74 +1080,76 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         />
       )}
 
-      <PlayerControls
-        showControls={showControls}
-        loadingStream={loadingStream}
-        streamError={streamError}
-        hasEnded={hasEnded}
-        titleDisplay={titleDisplay}
-        subtitleDisplay={subtitleDisplay}
-        isPlaying={isPlaying}
-        currentTime={currentTime}
-        duration={duration}
-        bufferedPercent={bufferedPercent}
-        progressPercent={progressPercent}
-        volume={volume}
-        isMuted={isMuted}
-        isFullscreen={isFullscreen}
-        playbackRate={playbackRate}
-        openMenu={openMenu}
-        nextEpisode={nextEpisode}
-        audioStreams={audioStreams}
-        selectedAudioIndex={selectedAudioIndex}
-        builtStream={builtStream}
-        selectedSubtitleIndex={selectedSubtitleIndex}
-        seekBarRef={seekBarRef}
-        menusContainerRef={menusContainerRef}
-        seekPreview={seekPreview}
-        trickplayFrame={trickplayFrame}
-        failedTiles={failedTiles}
-        onClosePlayer={handleClosePlayer}
-        onTogglePlayPause={togglePlayPause}
-        onSeekBy={seekBy}
-        onSeekTo={(next) => {
-          if (videoRef.current) videoRef.current.currentTime = next;
-          setCurrentTime(next);
-          if (duration > 0) {
-            setSeekPreview({ time: next, percent: (next / duration) * 100 });
-          }
-        }}
-        onUpdateSeekPreviewFromClientX={updateSeekPreviewFromClientX}
-        onClearSeekPreview={() => setSeekPreview(null)}
-        onTileError={(url) => setFailedTiles((prev) => ({ ...prev, [url]: true }))}
-        onBumpControls={bumpControls}
-        onToggleMute={() => {
-          if (!videoRef.current) return;
-          videoRef.current.muted = !videoRef.current.muted;
-          setIsMuted(videoRef.current.muted);
-        }}
-        onVolumeChange={(v) => {
-          if (videoRef.current) {
-            videoRef.current.volume = v;
-            videoRef.current.muted = v === 0;
-          }
-          setVolume(v);
-          setIsMuted(v === 0);
-        }}
-        onPlayNextEpisode={handlePlayNextEpisode}
-        onToggleMenu={(menu) => setOpenMenu((m) => (m === menu ? null : menu))}
-        onSelectAudio={handleSwitchAudio}
-        onSelectSubtitle={(subIdx) => {
-          setSelectedSubtitleIndex(subIdx);
-          setOpenMenu(null);
-        }}
-        onSelectPlaybackRate={(rate) => {
-          setPlaybackRate(rate);
-          if (videoRef.current) videoRef.current.playbackRate = rate;
-          setOpenMenu(null);
-        }}
-        onToggleFullscreen={toggleFullscreen}
-      />
+      {!resumePrompt && (
+        <PlayerControls
+          showControls={showControls}
+          loadingStream={loadingStream}
+          streamError={streamError}
+          hasEnded={hasEnded}
+          titleDisplay={titleDisplay}
+          subtitleDisplay={subtitleDisplay}
+          isPlaying={isPlaying}
+          currentTime={currentTime}
+          duration={duration}
+          bufferedPercent={bufferedPercent}
+          progressPercent={progressPercent}
+          volume={volume}
+          isMuted={isMuted}
+          isFullscreen={isFullscreen}
+          playbackRate={playbackRate}
+          openMenu={openMenu}
+          nextEpisode={nextEpisode}
+          audioStreams={audioStreams}
+          selectedAudioIndex={selectedAudioIndex}
+          builtStream={builtStream}
+          selectedSubtitleIndex={selectedSubtitleIndex}
+          seekBarRef={seekBarRef}
+          menusContainerRef={menusContainerRef}
+          seekPreview={seekPreview}
+          trickplayFrame={trickplayFrame}
+          failedTiles={failedTiles}
+          onClosePlayer={handleClosePlayer}
+          onTogglePlayPause={togglePlayPause}
+          onSeekBy={seekBy}
+          onSeekTo={(next) => {
+            if (videoRef.current) videoRef.current.currentTime = next;
+            setCurrentTime(next);
+            if (duration > 0) {
+              setSeekPreview({ time: next, percent: (next / duration) * 100 });
+            }
+          }}
+          onUpdateSeekPreviewFromClientX={updateSeekPreviewFromClientX}
+          onClearSeekPreview={() => setSeekPreview(null)}
+          onTileError={(url) => setFailedTiles((prev) => ({ ...prev, [url]: true }))}
+          onBumpControls={bumpControls}
+          onToggleMute={() => {
+            if (!videoRef.current) return;
+            videoRef.current.muted = !videoRef.current.muted;
+            setIsMuted(videoRef.current.muted);
+          }}
+          onVolumeChange={(v) => {
+            if (videoRef.current) {
+              videoRef.current.volume = v;
+              videoRef.current.muted = v === 0;
+            }
+            setVolume(v);
+            setIsMuted(v === 0);
+          }}
+          onPlayNextEpisode={handlePlayNextEpisode}
+          onToggleMenu={(menu) => setOpenMenu((m) => (m === menu ? null : menu))}
+          onSelectAudio={handleSwitchAudio}
+          onSelectSubtitle={(subIdx) => {
+            setSelectedSubtitleIndex(subIdx);
+            setOpenMenu(null);
+          }}
+          onSelectPlaybackRate={(rate) => {
+            setPlaybackRate(rate);
+            if (videoRef.current) videoRef.current.playbackRate = rate;
+            setOpenMenu(null);
+          }}
+          onToggleFullscreen={toggleFullscreen}
+        />
+      )}
     </div>
   );
 };

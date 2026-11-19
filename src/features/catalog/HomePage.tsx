@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useAuth } from '../../app/providers/AuthProvider';
 import { usePreferences } from '../../app/providers/PreferencesProvider';
 import { BaseItemDto } from '../../shared/types/jellyfin';
@@ -12,6 +12,7 @@ interface HomePageProps {
   onPlay: (item: BaseItemDto) => void;
   onOpenDetail: (item: BaseItemDto) => void;
   onToggleFavorite: (item: BaseItemDto) => Promise<void>;
+  onRegisterProgressRefresh?: (refreshFn: (() => Promise<void>) | null) => void;
   mutatedItems: Record<string, BaseItemDto>;
 }
 
@@ -21,6 +22,7 @@ export const HomePage: React.FC<HomePageProps> = ({
   onPlay,
   onOpenDetail,
   onToggleFavorite,
+  onRegisterProgressRefresh,
   mutatedItems,
 }) => {
   const { serverUrl, accessToken, user } = useAuth();
@@ -36,6 +38,7 @@ export const HomePage: React.FC<HomePageProps> = ({
     topRated,
     favorites,
     actionMovies,
+    refreshResumeAndNextUp,
     handleRemoveFromResume,
     handleRemoveFromNextUp,
   } = useHomeCatalog({
@@ -44,6 +47,13 @@ export const HomePage: React.FC<HomePageProps> = ({
     userId: user?.Id,
     refreshSignal,
   });
+
+  useEffect(() => {
+    onRegisterProgressRefresh?.(refreshResumeAndNextUp);
+    return () => {
+      onRegisterProgressRefresh?.(null);
+    };
+  }, [onRegisterProgressRefresh, refreshResumeAndNextUp]);
 
   const hydrate = (list: BaseItemDto[]): BaseItemDto[] =>
     list.map((item) => (mutatedItems[item.Id] ? { ...item, ...mutatedItems[item.Id] } : item));

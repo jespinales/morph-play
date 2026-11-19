@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { jellyfinApi } from '../../../shared/api/jellyfin';
 import { BaseItemDto } from '../../../shared/types/jellyfin';
 
@@ -24,11 +24,37 @@ export function useHomeCatalog({
   const [topRated, setTopRated] = useState<BaseItemDto[]>([]);
   const [favorites, setFavorites] = useState<BaseItemDto[]>([]);
   const [actionMovies, setActionMovies] = useState<BaseItemDto[]>([]);
+  const loadedContextRef = useRef<string | null>(null);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  const refreshResumeAndNextUp = useCallback(async () => {
+    if (!serverUrl || !accessToken || !userId) return;
+    const [resume, nextUp] = await Promise.all([
+      jellyfinApi.getResumeItems(serverUrl, accessToken, userId).catch(() => null),
+      jellyfinApi.getNextUpItems(serverUrl, accessToken, userId).catch(() => null),
+    ]);
+    if (!isMountedRef.current) return;
+    if (resume) setResumeItems(resume);
+    if (nextUp) setNextUpItems(nextUp);
+  }, [serverUrl, accessToken, userId]);
 
   useEffect(() => {
     let active = true;
     async function fetchHomeData() {
       if (!serverUrl || !accessToken || !userId) return;
+      const contextKey = `${serverUrl}|${userId}`;
+      if (refreshSignal > 0 && loadedContextRef.current === contextKey) {
+        await refreshResumeAndNextUp();
+        return;
+      }
+
       try {
         const [resume, nextUp, movies, series, top, favs, actionPrimary] = await Promise.all([
           jellyfinApi.getResumeItems(serverUrl, accessToken, userId).catch(() => []),
@@ -92,6 +118,7 @@ export function useHomeCatalog({
         setTopRated(top);
         setFavorites(favs);
         setActionMovies(action);
+        loadedContextRef.current = contextKey;
       } finally {
         if (active) setLoading(false);
       }
@@ -101,7 +128,7 @@ export function useHomeCatalog({
     return () => {
       active = false;
     };
-  }, [serverUrl, accessToken, userId, refreshSignal]);
+  }, [serverUrl, accessToken, userId, refreshSignal, refreshResumeAndNextUp]);
 
   const handleRemoveFromResume = async (item: BaseItemDto) => {
     if (!serverUrl || !accessToken || !userId) return;
@@ -157,6 +184,7 @@ export function useHomeCatalog({
     topRated,
     favorites,
     actionMovies,
+    refreshResumeAndNextUp,
     handleRemoveFromResume,
     handleRemoveFromNextUp,
   };

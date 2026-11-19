@@ -262,6 +262,10 @@ export interface TranslationDictionary {
     playbackSpeedAria: string;
     fullscreenTitle: string;
     fullscreenAria: string;
+    resumePromptTitle: string;
+    resumeFromTime: (time: string) => string;
+    startFromBeginning: string;
+    savedProgressLabel: (current: string, total?: string) => string;
   };
 }
 
@@ -515,6 +519,11 @@ const en: TranslationDictionary = {
     playbackSpeedAria: 'Playback speed',
     fullscreenTitle: 'Fullscreen (F)',
     fullscreenAria: 'Toggle fullscreen',
+    resumePromptTitle: 'Resume playback?',
+    resumeFromTime: (time) => `Resume from ${time}`,
+    startFromBeginning: 'Start from beginning',
+    savedProgressLabel: (current, total) =>
+      total ? `Saved at ${current} of ${total}` : `Saved at ${current}`,
   },
 };
 
@@ -768,6 +777,11 @@ const es: TranslationDictionary = {
     playbackSpeedAria: 'Velocidad de reproducción',
     fullscreenTitle: 'Pantalla completa (F)',
     fullscreenAria: 'Alternar pantalla completa',
+    resumePromptTitle: '¿Cómo quieres reproducirlo?',
+    resumeFromTime: (time) => `Continuar desde ${time}`,
+    startFromBeginning: 'Empezar desde el principio',
+    savedProgressLabel: (current, total) =>
+      total ? `Te quedaste en ${current} de ${total}` : `Te quedaste en ${current}`,
   },
 };
 

@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 interface UsePlayerKeyboardParams {
   videoRef: React.RefObject<HTMLVideoElement>;
   hasOpenMenu: boolean;
+  suspendPlaybackShortcuts?: boolean;
   onCloseMenu: () => void;
   onClosePlayer: () => void;
   onTogglePlayPause: () => void;
@@ -15,6 +16,7 @@ interface UsePlayerKeyboardParams {
 export function usePlayerKeyboard({
   videoRef,
   hasOpenMenu,
+  suspendPlaybackShortcuts = false,
   onCloseMenu,
   onClosePlayer,
   onTogglePlayPause,
@@ -33,6 +35,8 @@ export function usePlayerKeyboard({
         }
         return;
       }
+
+      if (suspendPlaybackShortcuts) return;
 
       const video = videoRef.current;
       if (!video) return;
@@ -78,6 +82,7 @@ export function usePlayerKeyboard({
   }, [
     videoRef,
     hasOpenMenu,
+    suspendPlaybackShortcuts,
     onCloseMenu,
     onClosePlayer,
     onTogglePlayPause,

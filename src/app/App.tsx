@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { ProfileSelectPage } from '../features/auth/ProfileSelectPage';
 import { ServerConnectPage } from '../features/auth/ServerConnectPage';
@@ -34,6 +34,18 @@ const AppShell: React.FC = () => {
   const [playback, setPlayback] = useState<PlaybackState | null>(null);
   const [mutatedItems, setMutatedItems] = useState<Record<string, BaseItemDto>>({});
   const [refreshSignal, setRefreshSignal] = useState(0);
+  const homeProgressRefreshRef = useRef<(() => Promise<void>) | null>(null);
+
+  const handleRegisterHomeProgressRefresh = useCallback(
+    (refreshFn: (() => Promise<void>) | null) => {
+      homeProgressRefreshRef.current = refreshFn;
+    },
+    []
+  );
+
+  const handleSyncHomeProgress = useCallback(async () => {
+    await homeProgressRefreshRef.current?.();
+  }, []);
 
   // Clear local modal/mutation state when signing out or switching profiles
   useEffect(() => {
@@ -121,6 +133,7 @@ const AppShell: React.FC = () => {
               onPlay={(item) => handlePlay(item)}
               onOpenDetail={(item) => setDetailItem(item)}
               onToggleFavorite={handleToggleFavorite}
+              onRegisterProgressRefresh={handleRegisterHomeProgressRefresh}
               mutatedItems={mutatedItems}
             />
           }
@@ -220,6 +233,7 @@ const AppShell: React.FC = () => {
           item={playback.item}
           episodeQueue={playback.episodeQueue}
           onClose={() => setPlayback(null)}
+          onSyncProgress={handleSyncHomeProgress}
           onProgressUpdated={() => setRefreshSignal((n) => n + 1)}
         />
       )}
