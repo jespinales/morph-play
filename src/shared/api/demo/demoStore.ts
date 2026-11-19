@@ -5,6 +5,7 @@ export const demoFavoriteOverrides = new Map<string, boolean>();
 export const demoPlayedOverrides = new Map<string, boolean>();
 export const demoProgressOverrides = new Map<string, number>();
 export const demoRemovedNextUp = new Set<string>();
+export const demoPlaylists = new Map<string, { name: string; itemIds: string[] }>();
 
 export function isDemoServer(serverUrl: string | null | undefined): boolean {
   return serverUrl === DEMO_SERVER_URL;

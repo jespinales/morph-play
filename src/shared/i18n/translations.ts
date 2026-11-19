@@ -73,6 +73,11 @@ export interface TranslationDictionary {
     verifying: string;
     enter: string;
     closeAria: string;
+    quickConnect: string;
+    quickConnectDesc: string;
+    quickConnectWaiting: string;
+    quickConnectError: string;
+    quickConnectCodeLabel: string;
   };
   nav: {
     mainAria: string;
@@ -91,6 +96,7 @@ export interface TranslationDictionary {
     profileFallback: string;
     playbackPreferences: string;
     switchProfile: string;
+    logoutSession: string;
     disconnectServer: string;
   };
   hero: {
@@ -127,22 +133,33 @@ export interface TranslationDictionary {
     recentSeries: string;
     topRated: string;
     myList: string;
+    recommendedForYou: string;
     actionAndAdventure: string;
   };
   catalog: {
     movies: string;
     series: string;
     collections: string;
+    playlists: string;
     favorites: string;
     searchTitle: string;
     searchResultsFor: (query: string) => string;
     emptyMovies: string;
     emptySeries: string;
     emptyCollections: string;
+    emptyPlaylists: string;
     emptyFavorites: string;
     emptySearch: string;
+    newPlaylist: string;
+    createPlaylistPlaceholder: string;
+    createPlaylistBtn: string;
     loadingTitles: string;
     availableTitles: (count: number) => string;
+    showingCount: (shown: number, total: number) => string;
+    loadMore: string;
+    loadingMore: string;
+    allLibraries: string;
+    filterLibraryAria: string;
     searchInputPlaceholder: string;
     searchInputAria: string;
     filterGenreAria: string;
@@ -162,6 +179,11 @@ export interface TranslationDictionary {
     removeFromList: string;
     markUnplayed: string;
     markPlayed: string;
+    watchTrailer: string;
+    extrasTitle: string;
+    filmography: string;
+    noPersonCredits: string;
+    viewPersonAria: (name: string) => string;
     noOverview: string;
     genres: string;
     originalTitle: string;
@@ -169,10 +191,17 @@ export interface TranslationDictionary {
     format: string;
     formatSeries: string;
     formatCollection: string;
+    formatPlaylist: string;
     formatMovie: string;
     episodes: string;
     noEpisodesInSeason: string;
     collectionItems: string;
+    playlistItems: string;
+    addToPlaylist: string;
+    playlistNamePlaceholder: string;
+    createAndAdd: string;
+    addedToPlaylist: (name: string) => string;
+    removeFromPlaylist: string;
     cast: string;
     similarTitles: string;
   };
@@ -180,7 +209,14 @@ export interface TranslationDictionary {
     defaultUser: string;
     demoSuffix: string;
     switchProfile: string;
+    logoutSession: string;
     disconnect: string;
+    quickConnectAuthTitle: string;
+    quickConnectAuthDesc: string;
+    quickConnectCodePlaceholder: string;
+    authorizeBtn: string;
+    authorizeSuccess: string;
+    authorizeError: string;
     playbackPreferences: string;
     preferredQuality: string;
     qualityAutoLabel: string;
@@ -266,6 +302,27 @@ export interface TranslationDictionary {
     resumeFromTime: (time: string) => string;
     startFromBeginning: string;
     savedProgressLabel: (current: string, total?: string) => string;
+    versionsTitle: string;
+    versionsSelectAria: string;
+    versionsHeading: string;
+    chaptersTitle: string;
+    chaptersSelectAria: string;
+    chaptersHeading: string;
+    chapterFallback: (index: number) => string;
+    subtitleBurnInBadge: string;
+    castTitle: string;
+    castSelectAria: string;
+    castHeading: string;
+    castEmpty: string;
+    castSent: (device: string) => string;
+    syncPlayTitle: string;
+    syncPlaySelectAria: string;
+    syncPlayHeading: string;
+    syncPlayGroupPlaceholder: string;
+    syncPlayCreateBtn: string;
+    syncPlayLeave: string;
+    syncPlayEmpty: string;
+    syncPlayJoined: (name: string) => string;
   };
 }
 
@@ -330,6 +387,11 @@ const en: TranslationDictionary = {
     verifying: 'Verifying…',
     enter: 'Sign in',
     closeAria: 'Close',
+    quickConnect: 'Quick Connect',
+    quickConnectDesc: 'Enter this code on a signed-in device under Settings → Quick Connect.',
+    quickConnectWaiting: 'Waiting for approval…',
+    quickConnectError: 'Could not start Quick Connect. Make sure it is enabled on the server.',
+    quickConnectCodeLabel: 'Quick Connect code',
   },
   nav: {
     mainAria: 'Primary navigation',
@@ -348,6 +410,7 @@ const en: TranslationDictionary = {
     profileFallback: 'Profile',
     playbackPreferences: 'Playback & Settings',
     switchProfile: 'Switch profile',
+    logoutSession: 'Log out session',
     disconnectServer: 'Disconnect server',
   },
   hero: {
@@ -384,22 +447,33 @@ const en: TranslationDictionary = {
     recentSeries: 'Recently Added Series',
     topRated: 'Top 10 Highest Rated',
     myList: 'My List',
+    recommendedForYou: 'Recommended for You',
     actionAndAdventure: 'Action & Adventure',
   },
   catalog: {
     movies: 'Movies',
     series: 'Series',
     collections: 'Collections',
+    playlists: 'Playlists',
     favorites: 'My List',
     searchTitle: 'Explore catalog',
     searchResultsFor: (query) => `Results for “${query}”`,
     emptyMovies: 'No movies found.',
     emptySeries: 'No series found.',
     emptyCollections: 'No collections configured on the server.',
+    emptyPlaylists: 'No video playlists created yet.',
     emptyFavorites: 'You have not added any titles to My List yet.',
     emptySearch: 'No matches found for your search.',
+    newPlaylist: 'New playlist',
+    createPlaylistPlaceholder: 'Playlist name',
+    createPlaylistBtn: 'Create',
     loadingTitles: 'Loading titles…',
     availableTitles: (count) => `${count} ${count === 1 ? 'title' : 'titles'} available`,
+    showingCount: (shown, total) => `Showing ${shown} of ${total}`,
+    loadMore: 'Load more',
+    loadingMore: 'Loading more…',
+    allLibraries: 'All libraries',
+    filterLibraryAria: 'Filter by library',
     searchInputPlaceholder: 'Search movies, series, or genres…',
     searchInputAria: 'Search movies, series, or genres',
     filterGenreAria: 'Filter by genre',
@@ -419,6 +493,11 @@ const en: TranslationDictionary = {
     removeFromList: 'Remove from My List',
     markUnplayed: 'Mark as unplayed',
     markPlayed: 'Mark as watched',
+    watchTrailer: 'Watch trailer',
+    extrasTitle: 'Extras & Featurettes',
+    filmography: 'Filmography on this server',
+    noPersonCredits: 'No movies or series found for this person.',
+    viewPersonAria: (name) => `View titles with ${name}`,
     noOverview: 'No synopsis available on the server.',
     genres: 'Genres:',
     originalTitle: 'Original title:',
@@ -426,10 +505,17 @@ const en: TranslationDictionary = {
     format: 'Format:',
     formatSeries: 'Series',
     formatCollection: 'Collection',
+    formatPlaylist: 'Playlist',
     formatMovie: 'Movie',
     episodes: 'Episodes',
     noEpisodesInSeason: 'No episodes available in this season.',
     collectionItems: 'Titles in this collection',
+    playlistItems: 'Titles in this playlist',
+    addToPlaylist: 'Add to playlist',
+    playlistNamePlaceholder: 'New playlist name',
+    createAndAdd: 'Create & add',
+    addedToPlaylist: (name) => `Added to "${name}"`,
+    removeFromPlaylist: 'Remove from playlist',
     cast: 'Cast',
     similarTitles: 'Similar titles',
   },
@@ -437,7 +523,14 @@ const en: TranslationDictionary = {
     defaultUser: 'User',
     demoSuffix: ' (Demo Mode)',
     switchProfile: 'Switch profile',
+    logoutSession: 'Log out session',
     disconnect: 'Disconnect',
+    quickConnectAuthTitle: 'Authorize Quick Connect',
+    quickConnectAuthDesc: 'Enter the 6-digit code shown on another device (such as a TV) to approve sign-in.',
+    quickConnectCodePlaceholder: '6-digit code',
+    authorizeBtn: 'Authorize',
+    authorizeSuccess: 'Device authorized successfully.',
+    authorizeError: 'Invalid or expired Quick Connect code.',
     playbackPreferences: 'Playback preferences',
     preferredQuality: 'Preferred streaming quality',
     qualityAutoLabel: 'Auto / Direct Play',
@@ -524,6 +617,27 @@ const en: TranslationDictionary = {
     startFromBeginning: 'Start from beginning',
     savedProgressLabel: (current, total) =>
       total ? `Saved at ${current} of ${total}` : `Saved at ${current}`,
+    versionsTitle: 'Video version',
+    versionsSelectAria: 'Select video version',
+    versionsHeading: 'Versions',
+    chaptersTitle: 'Chapters',
+    chaptersSelectAria: 'Open chapters',
+    chaptersHeading: 'Chapters',
+    chapterFallback: (index) => `Chapter ${index + 1}`,
+    subtitleBurnInBadge: 'Burn-in',
+    castTitle: 'Play on another device',
+    castSelectAria: 'Cast to device',
+    castHeading: 'Available devices',
+    castEmpty: 'No active remote devices found',
+    castSent: (device) => `Sent to ${device}`,
+    syncPlayTitle: 'SyncPlay (Watch Together)',
+    syncPlaySelectAria: 'Open SyncPlay watch party',
+    syncPlayHeading: 'SyncPlay groups',
+    syncPlayGroupPlaceholder: 'Group name',
+    syncPlayCreateBtn: 'Create room',
+    syncPlayLeave: 'Leave room',
+    syncPlayEmpty: 'No active SyncPlay rooms',
+    syncPlayJoined: (name) => `SyncPlay: ${name}`,
   },
 };
 
@@ -588,6 +702,11 @@ const es: TranslationDictionary = {
     verifying: 'Verificando…',
     enter: 'Entrar',
     closeAria: 'Cerrar',
+    quickConnect: 'Quick Connect',
+    quickConnectDesc: 'Ingresa este código en otro dispositivo conectado en Ajustes → Quick Connect.',
+    quickConnectWaiting: 'Esperando aprobación…',
+    quickConnectError: 'No se pudo iniciar Quick Connect. Comprueba que esté activo en el servidor.',
+    quickConnectCodeLabel: 'Código Quick Connect',
   },
   nav: {
     mainAria: 'Navegación principal',
@@ -606,6 +725,7 @@ const es: TranslationDictionary = {
     profileFallback: 'Perfil',
     playbackPreferences: 'Preferencias y ajustes',
     switchProfile: 'Cambiar de perfil',
+    logoutSession: 'Cerrar sesión',
     disconnectServer: 'Desconectar servidor',
   },
   hero: {
@@ -642,22 +762,33 @@ const es: TranslationDictionary = {
     recentSeries: 'Reciente en Series',
     topRated: 'Top 10 mejor valorados',
     myList: 'Mi lista',
+    recommendedForYou: 'Recomendado para ti',
     actionAndAdventure: 'Acción y aventura',
   },
   catalog: {
     movies: 'Películas',
     series: 'Series',
     collections: 'Colecciones',
+    playlists: 'Playlists',
     favorites: 'Mi lista',
     searchTitle: 'Explorar catálogo',
     searchResultsFor: (query) => `Resultados para “${query}”`,
     emptyMovies: 'No se encontraron películas.',
     emptySeries: 'No se encontraron series.',
     emptyCollections: 'No hay colecciones configuradas en el servidor.',
+    emptyPlaylists: 'Aún no hay playlists de video creadas.',
     emptyFavorites: 'Aún no has agregado títulos a Mi lista.',
     emptySearch: 'No hay coincidencias para tu búsqueda.',
+    newPlaylist: 'Nueva playlist',
+    createPlaylistPlaceholder: 'Nombre de la playlist',
+    createPlaylistBtn: 'Crear',
     loadingTitles: 'Cargando títulos…',
     availableTitles: (count) => `${count} ${count === 1 ? 'título disponible' : 'títulos disponibles'}`,
+    showingCount: (shown, total) => `Mostrando ${shown} de ${total}`,
+    loadMore: 'Cargar más',
+    loadingMore: 'Cargando más…',
+    allLibraries: 'Todas las bibliotecas',
+    filterLibraryAria: 'Filtrar por biblioteca',
     searchInputPlaceholder: 'Buscar película, serie o género…',
     searchInputAria: 'Buscar película, serie o género',
     filterGenreAria: 'Filtrar por género',
@@ -677,6 +808,11 @@ const es: TranslationDictionary = {
     removeFromList: 'Quitar de Mi lista',
     markUnplayed: 'Marcar como no visto',
     markPlayed: 'Marcar como visto',
+    watchTrailer: 'Ver tráiler',
+    extrasTitle: 'Extras y material adicional',
+    filmography: 'Filmografía en este servidor',
+    noPersonCredits: 'No se encontraron películas ni series para esta persona.',
+    viewPersonAria: (name) => `Ver títulos de ${name}`,
     noOverview: 'Sin sinopsis disponible en el servidor.',
     genres: 'Géneros:',
     originalTitle: 'Título original:',
@@ -684,10 +820,17 @@ const es: TranslationDictionary = {
     format: 'Formato:',
     formatSeries: 'Serie',
     formatCollection: 'Colección',
+    formatPlaylist: 'Playlist',
     formatMovie: 'Película',
     episodes: 'Episodios',
     noEpisodesInSeason: 'No hay episodios disponibles en esta temporada.',
     collectionItems: 'Títulos en esta colección',
+    playlistItems: 'Títulos en esta playlist',
+    addToPlaylist: 'Agregar a playlist',
+    playlistNamePlaceholder: 'Nombre de nueva playlist',
+    createAndAdd: 'Crear y agregar',
+    addedToPlaylist: (name) => `Agregado a "${name}"`,
+    removeFromPlaylist: 'Quitar de la playlist',
     cast: 'Reparto principal',
     similarTitles: 'Títulos similares',
   },
@@ -695,7 +838,14 @@ const es: TranslationDictionary = {
     defaultUser: 'Usuario',
     demoSuffix: ' (Modo Demostración)',
     switchProfile: 'Cambiar de perfil',
+    logoutSession: 'Cerrar sesión',
     disconnect: 'Desconectar',
+    quickConnectAuthTitle: 'Autorizar Quick Connect',
+    quickConnectAuthDesc: 'Ingresa el código de 6 dígitos que aparece en otro dispositivo (como una TV) para aprobar su acceso.',
+    quickConnectCodePlaceholder: 'Código de 6 dígitos',
+    authorizeBtn: 'Autorizar',
+    authorizeSuccess: 'Dispositivo autorizado correctamente.',
+    authorizeError: 'Código Quick Connect inválido o expirado.',
     playbackPreferences: 'Preferencias de reproducción',
     preferredQuality: 'Calidad de transmisión preferida',
     qualityAutoLabel: 'Automática / Direct Play',
@@ -782,6 +932,27 @@ const es: TranslationDictionary = {
     startFromBeginning: 'Empezar desde el principio',
     savedProgressLabel: (current, total) =>
       total ? `Te quedaste en ${current} de ${total}` : `Te quedaste en ${current}`,
+    versionsTitle: 'Versión de video',
+    versionsSelectAria: 'Seleccionar versión de video',
+    versionsHeading: 'Versiones',
+    chaptersTitle: 'Capítulos',
+    chaptersSelectAria: 'Abrir capítulos',
+    chaptersHeading: 'Capítulos',
+    chapterFallback: (index) => `Capítulo ${index + 1}`,
+    subtitleBurnInBadge: 'Incrustado',
+    castTitle: 'Enviar a otro dispositivo',
+    castSelectAria: 'Enviar a dispositivo',
+    castHeading: 'Dispositivos disponibles',
+    castEmpty: 'No hay otros dispositivos activos',
+    castSent: (device) => `Enviado a ${device}`,
+    syncPlayTitle: 'SyncPlay (Ver juntos)',
+    syncPlaySelectAria: 'Abrir sala SyncPlay',
+    syncPlayHeading: 'Salas SyncPlay',
+    syncPlayGroupPlaceholder: 'Nombre de la sala',
+    syncPlayCreateBtn: 'Crear sala',
+    syncPlayLeave: 'Salir de sala',
+    syncPlayEmpty: 'No hay salas SyncPlay activas',
+    syncPlayJoined: (name) => `SyncPlay: ${name}`,
   },
 };
 

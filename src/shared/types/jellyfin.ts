@@ -40,6 +40,33 @@ export interface UserConfiguration {
   AudioLanguagePreference?: string;
   SubtitleLanguagePreference?: string;
   PlayDefaultAudioTrack?: boolean;
+  SubtitleMode?: string;
+  EnableNextEpisodeAutoPlay?: boolean;
+  [key: string]: unknown;
+}
+
+export interface QuickConnectResult {
+  Secret: string;
+  Code: string;
+  Authenticated?: boolean;
+  DateAdded?: string;
+}
+
+export interface SessionInfoDto {
+  Id: string;
+  UserId?: string;
+  UserName?: string;
+  Client?: string;
+  DeviceName?: string;
+  DeviceId?: string;
+  ApplicationVersion?: string;
+  SupportsRemoteControl?: boolean;
+  IsActive?: boolean;
+  NowPlayingItem?: BaseItemDto;
+  PlayState?: {
+    PositionTicks?: number;
+    IsPaused?: boolean;
+  };
 }
 
 export interface UserDto {
@@ -137,6 +164,10 @@ export type BaseItemKind =
   | 'Season'
   | 'Episode'
   | 'BoxSet'
+  | 'Playlist'
+  | 'Person'
+  | 'Trailer'
+  | 'Video'
   | 'CollectionFolder'
   | 'Folder'
   | string;
@@ -149,6 +180,11 @@ export interface TrickplayInfoDto {
   ThumbnailCount: number;
   Interval: number;
   Bandwidth?: number;
+}
+
+export interface RemoteTrailerDto {
+  Name?: string;
+  Url?: string;
 }
 
 export interface BaseItemDto {
@@ -195,6 +231,47 @@ export interface BaseItemDto {
   RecursiveItemCount?: number;
   CollectionType?: string;
   DateCreated?: string;
+  PlaylistItemId?: string;
+  RemoteTrailers?: RemoteTrailerDto[];
+}
+
+export interface SearchHintDto {
+  Id: string;
+  ItemId?: string;
+  Name: string;
+  Type: BaseItemKind;
+  ProductionYear?: number;
+  PrimaryImageTag?: string;
+  ThumbImageTag?: string;
+  Series?: string;
+  IndexNumber?: number;
+  ParentIndexNumber?: number;
+}
+
+export interface SearchHintsResult {
+  SearchHints: SearchHintDto[];
+  TotalRecordCount: number;
+}
+
+export interface SyncPlayGroupDto {
+  GroupId: string;
+  GroupName: string;
+  State?: string;
+  Participants?: string[];
+  LastUpdatedAt?: string;
+}
+
+export interface PlaystateCommandData {
+  Command?: 'Pause' | 'Unpause' | 'PlayPause' | 'Stop' | 'Seek' | 'NextTrack' | 'PreviousTrack' | string;
+  SeekPositionTicks?: number;
+}
+
+export interface SyncPlayCommandData {
+  GroupId?: string;
+  PlaylistItemId?: string;
+  When?: string;
+  PositionTicks?: number;
+  Command?: 'Unpause' | 'Pause' | 'Stop' | 'Seek' | string;
 }
 
 export interface ItemsResult {

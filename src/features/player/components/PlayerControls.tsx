@@ -13,8 +13,15 @@ import {
 } from 'lucide-react';
 import { usePreferences } from '../../../app/providers/PreferencesProvider';
 import { BuiltPlaybackStream } from '../../../shared/api/playback';
-import { BaseItemDto, MediaStream } from '../../../shared/types/jellyfin';
-import { formatPlayerTime } from '../../../shared/utils/time';
+import {
+  BaseItemDto,
+  ChapterInfo,
+  MediaSourceInfo,
+  MediaStream,
+  SessionInfoDto,
+  SyncPlayGroupDto,
+} from '../../../shared/types/jellyfin';
+import { formatPlayerTime, ticksToSeconds } from '../../../shared/utils/time';
 import { TrickplayFrame } from '../../../shared/utils/trickplay';
 import { PlayerMenuKind, TrackMenus } from './TrackMenus';
 
@@ -35,6 +42,16 @@ interface PlayerControlsProps {
   isFullscreen: boolean;
   playbackRate: number;
   openMenu: PlayerMenuKind;
+  serverUrl: string;
+  itemId: string;
+  chapters: ChapterInfo[];
+  mediaSources: MediaSourceInfo[];
+  selectedMediaSourceId: string | undefined;
+  castSessions: SessionInfoDto[];
+  castStatusMessage: string | null;
+  syncPlayGroups: SyncPlayGroupDto[];
+  activeSyncPlayGroup: SyncPlayGroupDto | null;
+  syncPlayGroupInput: string;
   nextEpisode: BaseItemDto | null;
   audioStreams: MediaStream[];
   selectedAudioIndex: number | undefined;
@@ -57,6 +74,13 @@ interface PlayerControlsProps {
   onVolumeChange: (volume: number) => void;
   onPlayNextEpisode: () => void;
   onToggleMenu: (menu: Exclude<PlayerMenuKind, null>) => void;
+  onSelectChapter: (startSeconds: number) => void;
+  onSelectMediaSource: (source: MediaSourceInfo) => void;
+  onCastToSession: (session: SessionInfoDto) => void;
+  onSyncPlayGroupInputChange: (value: string) => void;
+  onCreateSyncPlayGroup: (e: React.FormEvent) => void;
+  onJoinSyncPlayGroup: (group: SyncPlayGroupDto) => void;
+  onLeaveSyncPlayGroup: () => void;
   onSelectAudio: (audioIdx: number) => void;
   onSelectSubtitle: (subIdx: number) => void;
   onSelectPlaybackRate: (rate: number) => void;
@@ -80,6 +104,16 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
   isFullscreen,
   playbackRate,
   openMenu,
+  serverUrl,
+  itemId,
+  chapters,
+  mediaSources,
+  selectedMediaSourceId,
+  castSessions,
+  castStatusMessage,
+  syncPlayGroups,
+  activeSyncPlayGroup,
+  syncPlayGroupInput,
   nextEpisode,
   audioStreams,
   selectedAudioIndex,
@@ -102,6 +136,13 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
   onVolumeChange,
   onPlayNextEpisode,
   onToggleMenu,
+  onSelectChapter,
+  onSelectMediaSource,
+  onCastToSession,
+  onSyncPlayGroupInputChange,
+  onCreateSyncPlayGroup,
+  onJoinSyncPlayGroup,
+  onLeaveSyncPlayGroup,
   onSelectAudio,
   onSelectSubtitle,
   onSelectPlaybackRate,
@@ -133,6 +174,11 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
             )}
           </div>
         </div>
+        {activeSyncPlayGroup && (
+          <span className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#00A4DC]/20 border border-[#00A4DC]/40 text-xs font-semibold text-[#7dd3fc]">
+            {t.player.syncPlayJoined(activeSyncPlayGroup.GroupName)}
+          </span>
+        )}
       </div>
 
       {/* Center touch quick controls */}
@@ -248,6 +294,18 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
                 className="absolute inset-y-0 left-0 bg-gradient-to-r from-[#AA5CC3] to-[#00A4DC]"
                 style={{ width: `${progressPercent}%` }}
               />
+              {duration > 0 &&
+                chapters.map((ch, idx) => {
+                  const pct = (ticksToSeconds(ch.StartPositionTicks) / duration) * 100;
+                  if (pct <= 0.5 || pct >= 99.5) return null;
+                  return (
+                    <span
+                      key={`chap-mark-${idx}`}
+                      className="absolute inset-y-0 w-0.5 bg-white/55 pointer-events-none"
+                      style={{ left: `${pct}%` }}
+                    />
+                  );
+                })}
             </div>
             <input
               id="player-seek-slider"
@@ -353,6 +411,14 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
             <TrackMenus
               openMenu={openMenu}
               onToggleMenu={onToggleMenu}
+              serverUrl={serverUrl}
+              itemId={itemId}
+              chapters={chapters}
+              currentTime={currentTime}
+              onSelectChapter={onSelectChapter}
+              mediaSources={mediaSources}
+              selectedMediaSourceId={selectedMediaSourceId}
+              onSelectMediaSource={onSelectMediaSource}
               audioStreams={audioStreams}
               selectedAudioIndex={selectedAudioIndex}
               onSelectAudio={onSelectAudio}
@@ -361,6 +427,16 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
               onSelectSubtitle={onSelectSubtitle}
               playbackRate={playbackRate}
               onSelectPlaybackRate={onSelectPlaybackRate}
+              castSessions={castSessions}
+              onCastToSession={onCastToSession}
+              castStatusMessage={castStatusMessage}
+              syncPlayGroups={syncPlayGroups}
+              activeSyncPlayGroup={activeSyncPlayGroup}
+              syncPlayGroupInput={syncPlayGroupInput}
+              onSyncPlayGroupInputChange={onSyncPlayGroupInputChange}
+              onCreateSyncPlayGroup={onCreateSyncPlayGroup}
+              onJoinSyncPlayGroup={onJoinSyncPlayGroup}
+              onLeaveSyncPlayGroup={onLeaveSyncPlayGroup}
             />
 
             <button

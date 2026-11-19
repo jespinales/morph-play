@@ -2,17 +2,23 @@ import React, { useEffect, useState } from 'react';
 import {
   Calendar,
   Check,
+  Clapperboard,
   Clock,
   Eye,
   Film,
   Layers,
+  ListPlus,
+  ListVideo,
   Play,
   Plus,
   Star,
+  Trash2,
+  User as UserIcon,
   X,
 } from 'lucide-react';
 import { useAuth } from '../../app/providers/AuthProvider';
 import { usePreferences } from '../../app/providers/PreferencesProvider';
+import { jellyfinApi } from '../../shared/api/jellyfin';
 import { getItemImageUrl, getPersonImageUrl } from '../../shared/api/playback';
 import { BaseItemDto } from '../../shared/types/jellyfin';
 import { formatDurationFromTicks } from '../../shared/utils/time';
@@ -36,6 +42,10 @@ export const DetailModal: React.FC<DetailModalProps> = ({
   const { serverUrl, accessToken, user } = useAuth();
   const { t } = usePreferences();
   const [logoFailed, setLogoFailed] = useState(false);
+  const [playlistPickerOpen, setPlaylistPickerOpen] = useState(false);
+  const [playlists, setPlaylists] = useState<BaseItemDto[]>([]);
+  const [newPlaylistName, setNewPlaylistName] = useState('');
+  const [playlistFeedback, setPlaylistFeedback] = useState<string | null>(null);
 
   const {
     detail,
@@ -43,11 +53,15 @@ export const DetailModal: React.FC<DetailModalProps> = ({
     selectedSeasonId,
     episodes,
     collectionItems,
+    personCredits,
+    trailers,
+    specialFeatures,
     similar,
     loadingEpisodes,
     handleSeasonChange,
     handleToggleFavorite,
     handleTogglePlayed,
+    handleRemoveFromPlaylist,
   } = useMediaDetail({
     item,
     serverUrl,
@@ -58,7 +72,36 @@ export const DetailModal: React.FC<DetailModalProps> = ({
 
   useEffect(() => {
     setLogoFailed(false);
+    setPlaylistPickerOpen(false);
+    setPlaylistFeedback(null);
   }, [item]);
+
+  const handleOpenPlaylistPicker = async () => {
+    const nextOpen = !playlistPickerOpen;
+    setPlaylistPickerOpen(nextOpen);
+    setPlaylistFeedback(null);
+    if (nextOpen && serverUrl && accessToken && user) {
+      const list = await jellyfinApi.getPlaylists(serverUrl, accessToken, user.Id).catch(() => []);
+      setPlaylists(list);
+    }
+  };
+
+  const handleAddToExistingPlaylist = async (pl: BaseItemDto) => {
+    if (!serverUrl || !accessToken || !user) return;
+    await jellyfinApi.addToPlaylist(serverUrl, accessToken, user.Id, pl.Id, [detail.Id]);
+    setPlaylistFeedback(t.detail.addedToPlaylist(pl.Name));
+    setPlaylistPickerOpen(false);
+  };
+
+  const handleCreatePlaylistWithItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!serverUrl || !accessToken || !user || !newPlaylistName.trim()) return;
+    const title = newPlaylistName.trim();
+    await jellyfinApi.createPlaylist(serverUrl, accessToken, user.Id, title, [detail.Id]);
+    setNewPlaylistName('');
+    setPlaylistFeedback(t.detail.addedToPlaylist(title));
+    setPlaylistPickerOpen(false);
+  };
 
   // Lock document scroll while modal is open and handle Escape key
   useEffect(() => {
@@ -85,15 +128,22 @@ export const DetailModal: React.FC<DetailModalProps> = ({
       onPlay(resumable, episodes);
       return;
     }
-    if (detail.Type === 'BoxSet' && collectionItems.length > 0) {
-      onPlay(collectionItems[0]);
+    if ((detail.Type === 'BoxSet' || detail.Type === 'Playlist') && collectionItems.length > 0) {
+      onPlay(collectionItems[0], detail.Type === 'Playlist' ? collectionItems : undefined);
       return;
     }
     onPlay(detail);
   };
 
-  const backdropUrl = getItemImageUrl(serverUrl, detail, 'Backdrop', 1600);
-  const logoUrl = !logoFailed ? getItemImageUrl(serverUrl, detail, 'Logo', 600) : null;
+  const isPerson = detail.Type === 'Person';
+  const backdropUrl = isPerson
+    ? getPersonImageUrl(serverUrl, detail.Id, detail.ImageTags?.Primary)
+    : getItemImageUrl(serverUrl, detail, 'Backdrop', 1600);
+  const logoUrl = !isPerson && !logoFailed ? getItemImageUrl(serverUrl, detail, 'Logo', 600) : null;
+  const localTrailer = trailers[0];
+  const remoteTrailerUrl = detail.RemoteTrailers?.find((rt) =>
+    Boolean(rt.Url && /^https?:\/\//i.test(rt.Url))
+  )?.Url;
   const durationLabel = formatDurationFromTicks(detail.RunTimeTicks);
   const isFavorite = Boolean(detail.UserData?.IsFavorite);
   const isPlayed = Boolean(detail.UserData?.Played);
@@ -154,54 +204,133 @@ export const DetailModal: React.FC<DetailModalProps> = ({
               </h2>
             )}
 
-            <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
-              <button
-                type="button"
-                onClick={handlePrimaryPlay}
-                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg bg-white text-black font-bold text-sm sm:text-base hover:bg-white/90 active:scale-[0.98] transition-all shadow-lg"
-              >
-                <Play className="w-5 h-5 fill-black" />
-                {hasResume ? t.common.resume : t.common.play}
-              </button>
+            {!isPerson && (
+              <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+                <button
+                  type="button"
+                  onClick={handlePrimaryPlay}
+                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg bg-white text-black font-bold text-sm sm:text-base hover:bg-white/90 active:scale-[0.98] transition-all shadow-lg"
+                >
+                  <Play className="w-5 h-5 fill-black" />
+                  {hasResume ? t.common.resume : t.common.play}
+                </button>
 
-              {detail.Type !== 'BoxSet' && (
-                <>
+                {localTrailer ? (
                   <button
                     type="button"
-                    onClick={handleToggleFavorite}
-                    title={isFavorite ? t.detail.removeFromList : t.detail.addToList}
-                    className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border text-sm font-semibold transition-all ${
-                      isFavorite
-                        ? 'bg-[#00A4DC]/20 border-[#00A4DC] text-[#7dd3fc]'
-                        : 'bg-white/10 border-white/25 text-white hover:bg-white/20'
-                    }`}
+                    onClick={() => onPlay(localTrailer)}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-white/25 bg-white/10 hover:bg-white/20 text-white text-sm font-semibold transition-all"
                   >
-                    {isFavorite ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                    <span>{isFavorite ? t.detail.inMyList : t.detail.myList}</span>
+                    <Clapperboard className="w-4 h-4" />
+                    <span>{t.detail.watchTrailer}</span>
                   </button>
+                ) : remoteTrailerUrl ? (
+                  <a
+                    href={remoteTrailerUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-white/25 bg-white/10 hover:bg-white/20 text-white text-sm font-semibold transition-all"
+                  >
+                    <Clapperboard className="w-4 h-4" />
+                    <span>{t.detail.watchTrailer}</span>
+                  </a>
+                ) : null}
 
-                  <button
-                    type="button"
-                    onClick={handleTogglePlayed}
-                    title={isPlayed ? t.detail.markUnplayed : t.detail.markPlayed}
-                    className={`p-2.5 rounded-lg border transition-all ${
-                      isPlayed
-                        ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300'
-                        : 'bg-white/10 border-white/25 text-zinc-200 hover:bg-white/20'
-                    }`}
-                  >
-                    <Eye className="w-5 h-5" />
-                  </button>
-                </>
-              )}
-            </div>
+                {detail.Type !== 'BoxSet' && detail.Type !== 'Playlist' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleToggleFavorite}
+                      title={isFavorite ? t.detail.removeFromList : t.detail.addToList}
+                      className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border text-sm font-semibold transition-all ${
+                        isFavorite
+                          ? 'bg-[#00A4DC]/20 border-[#00A4DC] text-[#7dd3fc]'
+                          : 'bg-white/10 border-white/25 text-white hover:bg-white/20'
+                      }`}
+                    >
+                      {isFavorite ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                      <span>{isFavorite ? t.detail.inMyList : t.detail.myList}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleTogglePlayed}
+                      title={isPlayed ? t.detail.markUnplayed : t.detail.markPlayed}
+                      className={`p-2.5 rounded-lg border transition-all ${
+                        isPlayed
+                          ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300'
+                          : 'bg-white/10 border-white/25 text-zinc-200 hover:bg-white/20'
+                      }`}
+                    >
+                      <Eye className="w-5 h-5" />
+                    </button>
+
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => void handleOpenPlaylistPicker()}
+                        title={t.detail.addToPlaylist}
+                        aria-label={t.detail.addToPlaylist}
+                        className="p-2.5 rounded-lg border border-white/25 bg-white/10 hover:bg-white/20 text-zinc-200 transition-all"
+                      >
+                        <ListPlus className="w-5 h-5" />
+                      </button>
+
+                      {playlistPickerOpen && (
+                        <div className="absolute left-0 bottom-12 z-40 w-64 rounded-xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 p-3 shadow-2xl space-y-2.5">
+                          <p className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                            {t.detail.addToPlaylist}
+                          </p>
+                          {playlists.length > 0 && (
+                            <div className="max-h-36 overflow-y-auto space-y-1">
+                              {playlists.map((pl) => (
+                                <button
+                                  key={pl.Id}
+                                  type="button"
+                                  onClick={() => void handleAddToExistingPlaylist(pl)}
+                                  className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-zinc-200 hover:bg-white/10 truncate"
+                                >
+                                  {pl.Name}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          <form onSubmit={handleCreatePlaylistWithItem} className="flex gap-1.5 pt-1 border-t border-white/10">
+                            <input
+                              type="text"
+                              value={newPlaylistName}
+                              onChange={(e) => setNewPlaylistName(e.target.value)}
+                              placeholder={t.detail.playlistNamePlaceholder}
+                              className="flex-1 min-w-0 bg-[#0a0a0e] border border-white/15 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#00A4DC]"
+                            />
+                            <button
+                              type="submit"
+                              disabled={!newPlaylistName.trim()}
+                              className="px-2.5 py-1.5 rounded-lg bg-[#00A4DC] text-black font-bold text-xs disabled:opacity-50"
+                            >
+                              {t.detail.createAndAdd}
+                            </button>
+                          </form>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {playlistFeedback && (
+                  <span className="text-xs font-semibold text-emerald-400 px-2">
+                    {playlistFeedback}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
         {/* Metadata, episodes, cast, and similar titles body */}
         <div className="p-5 sm:p-8 space-y-8">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-4">
+            <div className={`${isPerson ? 'lg:col-span-3' : 'lg:col-span-2'} space-y-4`}>
               {/* Badges row */}
               <div className="flex flex-wrap items-center gap-2.5 text-sm text-zinc-300">
                 {detail.CommunityRating && (
@@ -251,38 +380,42 @@ export const DetailModal: React.FC<DetailModalProps> = ({
             </div>
 
             {/* Right quick info column */}
-            <div className="space-y-2.5 text-xs sm:text-sm bg-white/[0.03] border border-white/10 rounded-xl p-4 h-fit">
-              {detail.Genres && detail.Genres.length > 0 && (
+            {!isPerson && (
+              <div className="space-y-2.5 text-xs sm:text-sm bg-white/[0.03] border border-white/10 rounded-xl p-4 h-fit">
+                {detail.Genres && detail.Genres.length > 0 && (
+                  <div>
+                    <span className="text-zinc-400">{t.detail.genres} </span>
+                    <span className="text-zinc-100 font-medium">{detail.Genres.join(', ')}</span>
+                  </div>
+                )}
+                {detail.OriginalTitle && detail.OriginalTitle !== detail.Name && (
+                  <div>
+                    <span className="text-zinc-400">{t.detail.originalTitle} </span>
+                    <span className="text-zinc-100">{detail.OriginalTitle}</span>
+                  </div>
+                )}
+                {detail.Studios && detail.Studios.length > 0 && (
+                  <div>
+                    <span className="text-zinc-400">{t.detail.studio} </span>
+                    <span className="text-zinc-100">
+                      {detail.Studios.map((s) => s.Name).join(', ')}
+                    </span>
+                  </div>
+                )}
                 <div>
-                  <span className="text-zinc-400">{t.detail.genres} </span>
-                  <span className="text-zinc-100 font-medium">{detail.Genres.join(', ')}</span>
-                </div>
-              )}
-              {detail.OriginalTitle && detail.OriginalTitle !== detail.Name && (
-                <div>
-                  <span className="text-zinc-400">{t.detail.originalTitle} </span>
-                  <span className="text-zinc-100">{detail.OriginalTitle}</span>
-                </div>
-              )}
-              {detail.Studios && detail.Studios.length > 0 && (
-                <div>
-                  <span className="text-zinc-400">{t.detail.studio} </span>
+                  <span className="text-zinc-400">{t.detail.format} </span>
                   <span className="text-zinc-100">
-                    {detail.Studios.map((s) => s.Name).join(', ')}
+                    {detail.Type === 'Series'
+                      ? t.detail.formatSeries
+                      : detail.Type === 'BoxSet'
+                        ? t.detail.formatCollection
+                        : detail.Type === 'Playlist'
+                          ? t.detail.formatPlaylist
+                          : t.detail.formatMovie}
                   </span>
                 </div>
-              )}
-              <div>
-                <span className="text-zinc-400">{t.detail.format} </span>
-                <span className="text-zinc-100">
-                  {detail.Type === 'Series'
-                    ? t.detail.formatSeries
-                    : detail.Type === 'BoxSet'
-                      ? t.detail.formatCollection
-                      : t.detail.formatMovie}
-                </span>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Seasons & Episodes (for Series) */}
@@ -395,38 +528,157 @@ export const DetailModal: React.FC<DetailModalProps> = ({
             </section>
           )}
 
-          {/* Collection items (for BoxSet) */}
-          {detail.Type === 'BoxSet' && collectionItems.length > 0 && (
+          {/* Collection or Playlist items */}
+          {(detail.Type === 'BoxSet' || detail.Type === 'Playlist') && collectionItems.length > 0 && (
             <section className="space-y-4 pt-2 border-t border-white/10">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <Layers className="w-5 h-5 text-[#AA5CC3]" />
-                {t.detail.collectionItems}
+                {detail.Type === 'Playlist' ? (
+                  <ListVideo className="w-5 h-5 text-[#00A4DC]" />
+                ) : (
+                  <Layers className="w-5 h-5 text-[#AA5CC3]" />
+                )}
+                {detail.Type === 'Playlist' ? t.detail.playlistItems : t.detail.collectionItems}
               </h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
                 {collectionItems.map((colItem) => {
                   const poster = getItemImageUrl(serverUrl, colItem, 'Primary', 400);
                   return (
-                    <button
-                      key={colItem.Id}
-                      type="button"
-                      onClick={() => onSelectItem(colItem)}
-                      className="group relative aspect-[2/3] rounded-lg overflow-hidden bg-[#181a24] ring-1 ring-white/10 hover:ring-white/40 transition-all text-left"
+                    <div
+                      key={`${colItem.PlaylistItemId ?? colItem.Id}`}
+                      className="group relative aspect-[2/3] rounded-lg overflow-hidden bg-[#181a24] ring-1 ring-white/10 hover:ring-white/40 transition-all"
                     >
-                      {poster ? (
-                        <img
-                          src={poster}
-                          alt={colItem.Name}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center p-3 text-center text-sm font-bold">
-                          {colItem.Name}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          detail.Type === 'Playlist'
+                            ? onPlay(colItem, collectionItems)
+                            : onSelectItem(colItem)
+                        }
+                        className="w-full h-full text-left"
+                      >
+                        {poster ? (
+                          <img
+                            src={poster}
+                            alt={colItem.Name}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center p-3 text-center text-sm font-bold">
+                            {colItem.Name}
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent flex items-end p-3">
+                          <span className="text-xs sm:text-sm font-bold text-white line-clamp-2">
+                            {colItem.Name}
+                          </span>
                         </div>
+                      </button>
+
+                      {detail.Type === 'Playlist' && colItem.PlaylistItemId && (
+                        <button
+                          type="button"
+                          onClick={() => void handleRemoveFromPlaylist(colItem)}
+                          title={t.detail.removeFromPlaylist}
+                          aria-label={t.detail.removeFromPlaylist}
+                          className="absolute top-2 right-2 z-10 w-8 h-8 rounded-full bg-black/70 hover:bg-rose-600/90 text-white border border-white/15 flex items-center justify-center transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent flex items-end p-3">
-                        <span className="text-xs sm:text-sm font-bold text-white line-clamp-2">
-                          {colItem.Name}
-                        </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {/* Person filmography */}
+          {isPerson && (
+            <section className="space-y-4 pt-2 border-t border-white/10">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <UserIcon className="w-5 h-5 text-[#00A4DC]" />
+                {t.detail.filmography}
+              </h3>
+              {personCredits.length === 0 ? (
+                <p className="text-sm text-zinc-400">{t.detail.noPersonCredits}</p>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
+                  {personCredits.map((credit) => {
+                    const poster = getItemImageUrl(serverUrl, credit, 'Primary', 400);
+                    return (
+                      <button
+                        key={credit.Id}
+                        type="button"
+                        onClick={() => onSelectItem(credit)}
+                        className="group relative aspect-[2/3] rounded-lg overflow-hidden bg-[#181a24] ring-1 ring-white/10 hover:ring-white/40 transition-all text-left"
+                      >
+                        {poster ? (
+                          <img
+                            src={poster}
+                            alt={credit.Name}
+                            loading="lazy"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center p-3 text-center text-sm font-bold">
+                            {credit.Name}
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent flex flex-col justify-end p-3">
+                          <span className="text-xs sm:text-sm font-bold text-white line-clamp-2">
+                            {credit.Name}
+                          </span>
+                          {credit.ProductionYear && (
+                            <span className="text-[11px] text-zinc-400">{credit.ProductionYear}</span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* Special features / extras */}
+          {specialFeatures.length > 0 && (
+            <section className="space-y-3 pt-2 border-t border-white/10">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Clapperboard className="w-5 h-5 text-[#00A4DC]" />
+                {t.detail.extrasTitle}
+              </h3>
+              <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1">
+                {specialFeatures.map((extra) => {
+                  const thumb = getItemImageUrl(serverUrl, extra, 'Backdrop', 480);
+                  return (
+                    <button
+                      key={extra.Id}
+                      type="button"
+                      onClick={() => onPlay(extra)}
+                      className="group flex-shrink-0 w-56 rounded-xl overflow-hidden bg-[#181a24] border border-white/10 hover:border-white/30 text-left transition-all"
+                    >
+                      <div className="relative aspect-video bg-black/50">
+                        {thumb && (
+                          <img
+                            src={thumb}
+                            alt={extra.Name}
+                            loading="lazy"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                        )}
+                        <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                          <span className="w-9 h-9 rounded-full bg-white/90 text-black flex items-center justify-center shadow">
+                            <Play className="w-4 h-4 fill-black ml-0.5" />
+                          </span>
+                        </div>
+                      </div>
+                      <div className="p-2.5 space-y-0.5">
+                        <p className="text-xs font-semibold text-white line-clamp-1">{extra.Name}</p>
+                        {extra.RunTimeTicks && (
+                          <p className="text-[11px] text-zinc-400">
+                            {formatDurationFromTicks(extra.RunTimeTicks)}
+                          </p>
+                        )}
                       </div>
                     </button>
                   );
@@ -443,17 +695,29 @@ export const DetailModal: React.FC<DetailModalProps> = ({
                 {cast.map((person) => {
                   const photo = getPersonImageUrl(serverUrl, person.Id, person.PrimaryImageTag);
                   return (
-                    <div
+                    <button
                       key={`${person.Id}-${person.Name}`}
-                      className="flex-shrink-0 w-28 sm:w-32 text-center space-y-1.5"
+                      type="button"
+                      onClick={() =>
+                        onSelectItem({
+                          Id: person.Id,
+                          Name: person.Name,
+                          Type: 'Person',
+                          ImageTags: person.PrimaryImageTag
+                            ? { Primary: person.PrimaryImageTag }
+                            : undefined,
+                        })
+                      }
+                      aria-label={t.detail.viewPersonAria(person.Name)}
+                      className="group flex-shrink-0 w-28 sm:w-32 text-center space-y-1.5 rounded-xl p-1.5 hover:bg-white/5 transition-colors cursor-pointer"
                     >
-                      <div className="w-20 h-20 sm:w-24 sm:h-24 mx-auto rounded-full overflow-hidden bg-white/10 ring-1 ring-white/15 flex items-center justify-center">
+                      <div className="w-20 h-20 sm:w-24 sm:h-24 mx-auto rounded-full overflow-hidden bg-white/10 ring-1 ring-white/15 group-hover:ring-[#00A4DC] transition-all flex items-center justify-center">
                         {photo ? (
                           <img
                             src={photo}
                             alt={person.Name}
                             loading="lazy"
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           />
                         ) : (
                           <span className="text-lg font-bold text-zinc-300">
@@ -465,7 +729,7 @@ export const DetailModal: React.FC<DetailModalProps> = ({
                           </span>
                         )}
                       </div>
-                      <p className="text-xs font-semibold text-white line-clamp-2 leading-snug">
+                      <p className="text-xs font-semibold text-white group-hover:text-[#7dd3fc] line-clamp-2 leading-snug transition-colors">
                         {person.Name}
                       </p>
                       {person.Role && (
@@ -473,7 +737,7 @@ export const DetailModal: React.FC<DetailModalProps> = ({
                           {person.Role}
                         </p>
                       )}
-                    </div>
+                    </button>
                   );
                 })}
               </div>

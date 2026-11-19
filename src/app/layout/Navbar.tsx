@@ -14,21 +14,39 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import { getUserAvatarUrl } from '../../shared/api/playback';
+import { jellyfinApi } from '../../shared/api/jellyfin';
+import { getItemImageUrl, getUserAvatarUrl } from '../../shared/api/playback';
 import { BrandLogo } from '../../shared/components/BrandLogo';
 import { LanguageSwitcher } from '../../shared/components/LanguageSwitcher';
+import { BaseItemDto, SearchHintDto } from '../../shared/types/jellyfin';
 import { useAuth } from '../providers/AuthProvider';
 import { usePreferences } from '../providers/PreferencesProvider';
 
-export const Navbar: React.FC = () => {
-  const { user, serverUrl, serverInfo, isEnvServerLocked, isDemo, switchProfile, disconnectServer } =
-    useAuth();
+interface NavbarProps {
+  onOpenSearchResult?: (item: BaseItemDto) => void;
+}
+
+export const Navbar: React.FC<NavbarProps> = ({ onOpenSearchResult }) => {
+  const {
+    user,
+    serverUrl,
+    accessToken,
+    serverInfo,
+    isEnvServerLocked,
+    isDemo,
+    switchProfile,
+    logoutSession,
+    disconnectServer,
+  } = useAuth();
   const { brand, locale, setLocale, t } = usePreferences();
   const [scrolled, setScrolled] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchHints, setSearchHints] = useState<SearchHintDto[]>([]);
+  const [hintsOpen, setHintsOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchBoxRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -53,10 +71,34 @@ export const Navbar: React.FC = () => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setMenuOpen(false);
       }
+      if (searchBoxRef.current && !searchBoxRef.current.contains(e.target as Node)) {
+        setHintsOpen(false);
+      }
     };
     document.addEventListener('pointerdown', handleClickOutside);
     return () => document.removeEventListener('pointerdown', handleClickOutside);
   }, []);
+
+  // Fetch instant Search/Hints suggestions as the user types
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (!searchOpen || q.length < 2 || !serverUrl || !accessToken || !user?.Id) {
+      setSearchHints([]);
+      return;
+    }
+    let active = true;
+    const timer = window.setTimeout(async () => {
+      const hints = await jellyfinApi.getSearchHints(serverUrl, accessToken, user.Id, q, 7);
+      if (active) {
+        setSearchHints(hints);
+        setHintsOpen(hints.length > 0);
+      }
+    }, 180);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [searchOpen, searchQuery, serverUrl, accessToken, user?.Id]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -145,10 +187,10 @@ export const Navbar: React.FC = () => {
             )}
 
             {/* Expandable search bar (full-width overlay below lg to avoid overflow on mobile/tablet) */}
-            <div className="relative flex items-center">
+            <div ref={searchBoxRef} className="relative flex items-center">
               {searchOpen ? (
                 <div className="fixed top-0 inset-x-0 z-50 h-16 md:h-[72px] bg-[#0a0a0e]/98 backdrop-blur-xl border-b border-white/10 px-4 sm:px-6 flex items-center lg:static lg:inset-auto lg:h-auto lg:bg-transparent lg:backdrop-blur-none lg:border-0 lg:p-0">
-                  <div className="flex items-center w-full lg:w-64 xl:w-72 bg-[#141620]/95 border border-white/20 rounded-full pl-3.5 pr-1 py-0.5 transition-all">
+                  <div className="relative flex items-center w-full lg:w-64 xl:w-72 bg-[#141620]/95 border border-white/20 rounded-full pl-3.5 pr-1 py-0.5 transition-all">
                     <Search className="w-4 h-4 text-zinc-400 shrink-0 mr-2" />
                     <input
                       id="navbar-search-input"
@@ -156,6 +198,9 @@ export const Navbar: React.FC = () => {
                       ref={searchInputRef}
                       type="text"
                       value={searchQuery}
+                      onFocus={() => {
+                        if (searchHints.length > 0) setHintsOpen(true);
+                      }}
                       onChange={(e) => handleSearchChange(e.target.value)}
                       placeholder={t.nav.searchPlaceholder}
                       aria-label={t.nav.searchAria}
@@ -165,6 +210,8 @@ export const Navbar: React.FC = () => {
                       type="button"
                       onClick={() => {
                         setSearchQuery('');
+                        setSearchHints([]);
+                        setHintsOpen(false);
                         setSearchOpen(false);
                         if (location.pathname === '/search') navigate('/');
                       }}
@@ -173,6 +220,62 @@ export const Navbar: React.FC = () => {
                     >
                       <X className="w-4 h-4" />
                     </button>
+
+                    {hintsOpen && searchHints.length > 0 && (
+                      <div className="absolute left-0 right-0 top-full mt-2 rounded-2xl bg-[#141620]/98 backdrop-blur-xl border border-white/15 shadow-2xl py-1.5 max-h-[60vh] overflow-y-auto z-50">
+                        {searchHints.map((hint) => {
+                          const targetId = hint.ItemId || hint.Id;
+                          const thumb = getItemImageUrl(
+                            serverUrl,
+                            {
+                              Id: targetId,
+                              Name: hint.Name,
+                              ImageTags: hint.PrimaryImageTag
+                                ? { Primary: hint.PrimaryImageTag }
+                                : undefined,
+                            },
+                            'Primary',
+                            160
+                          );
+                          return (
+                            <button
+                              key={`${hint.Type}-${targetId}`}
+                              type="button"
+                              onClick={() => {
+                                setHintsOpen(false);
+                                onOpenSearchResult?.({
+                                  Id: targetId,
+                                  Name: hint.Name,
+                                  Type: hint.Type,
+                                  ProductionYear: hint.ProductionYear,
+                                  SeriesName: hint.Series,
+                                  ImageTags: hint.PrimaryImageTag
+                                    ? { Primary: hint.PrimaryImageTag }
+                                    : undefined,
+                                });
+                              }}
+                              className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-white/10 transition-colors"
+                            >
+                              <div className="w-9 h-12 rounded bg-white/10 overflow-hidden shrink-0 flex items-center justify-center text-xs font-bold text-zinc-400">
+                                {thumb ? (
+                                  <img src={thumb} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                  hint.Name[0]?.toUpperCase()
+                                )}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs sm:text-sm font-semibold text-white truncate">
+                                  {hint.Name}
+                                </p>
+                                <p className="text-[11px] text-zinc-400 truncate">
+                                  {[hint.Series, hint.Type, hint.ProductionYear].filter(Boolean).join(' · ')}
+                                </p>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -251,6 +354,18 @@ export const Navbar: React.FC = () => {
                     >
                       <Users className="w-4 h-4 text-zinc-400" />
                       {t.nav.switchProfile}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        void logoutSession();
+                      }}
+                      className="w-full px-4 py-2 text-left text-sm text-zinc-200 hover:bg-white/10 hover:text-white flex items-center gap-2.5 transition-colors"
+                    >
+                      <LogOut className="w-4 h-4 text-zinc-400" />
+                      {t.nav.logoutSession}
                     </button>
 
                     <div className="px-4 py-2 flex items-center justify-between border-t border-white/10 mt-1">

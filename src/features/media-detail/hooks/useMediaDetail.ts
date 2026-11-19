@@ -22,6 +22,9 @@ export function useMediaDetail({
   const [selectedSeasonId, setSelectedSeasonId] = useState<string>('');
   const [episodes, setEpisodes] = useState<BaseItemDto[]>([]);
   const [collectionItems, setCollectionItems] = useState<BaseItemDto[]>([]);
+  const [personCredits, setPersonCredits] = useState<BaseItemDto[]>([]);
+  const [trailers, setTrailers] = useState<BaseItemDto[]>([]);
+  const [specialFeatures, setSpecialFeatures] = useState<BaseItemDto[]>([]);
   const [similar, setSimilar] = useState<BaseItemDto[]>([]);
   const [loadingEpisodes, setLoadingEpisodes] = useState(false);
 
@@ -31,22 +34,47 @@ export function useMediaDetail({
     setSeasons([]);
     setEpisodes([]);
     setCollectionItems([]);
+    setPersonCredits([]);
+    setTrailers([]);
+    setSpecialFeatures([]);
     setSimilar([]);
 
     async function load() {
       if (!serverUrl || !accessToken || !userId) return;
       try {
-        const [fullDetail, sim] = await Promise.all([
+        const isPerson = item.Type === 'Person';
+        const isBoxSet = item.Type === 'BoxSet';
+        const isPlaylist = item.Type === 'Playlist';
+
+        const [fullDetail, sim, localTrailers, extras] = await Promise.all([
           jellyfinApi.getItemDetail(serverUrl, accessToken, userId, item.Id),
-          item.Type === 'BoxSet'
+          isPerson || isBoxSet || isPlaylist
             ? Promise.resolve([])
             : jellyfinApi.getSimilarItems(serverUrl, accessToken, userId, item.Id, 9),
+          isPerson || isBoxSet || isPlaylist
+            ? Promise.resolve([])
+            : jellyfinApi.getLocalTrailers(serverUrl, accessToken, userId, item.Id),
+          isPerson || isBoxSet || isPlaylist
+            ? Promise.resolve([])
+            : jellyfinApi.getSpecialFeatures(serverUrl, accessToken, userId, item.Id),
         ]);
         if (!active) return;
         setDetail(fullDetail);
         setSimilar(sim);
+        setTrailers(localTrailers);
+        setSpecialFeatures(extras);
 
-        if (fullDetail.Type === 'Series') {
+        if (fullDetail.Type === 'Person') {
+          const credits = await jellyfinApi.getItems(serverUrl, accessToken, userId, {
+            includeItemTypes: 'Movie,Series',
+            personIds: fullDetail.Id,
+            sortBy: 'ProductionYear',
+            sortOrder: 'Descending',
+            limit: 60,
+          });
+          if (!active) return;
+          setPersonCredits(credits.Items);
+        } else if (fullDetail.Type === 'Series') {
           setLoadingEpisodes(true);
           const sList = await jellyfinApi.getSeasons(serverUrl, accessToken, userId, fullDetail.Id);
           if (!active) return;
@@ -73,6 +101,15 @@ export function useMediaDetail({
           });
           if (!active) return;
           setCollectionItems(children.Items);
+        } else if (fullDetail.Type === 'Playlist') {
+          const entries = await jellyfinApi.getPlaylistItems(
+            serverUrl,
+            accessToken,
+            userId,
+            fullDetail.Id
+          );
+          if (!active) return;
+          setCollectionItems(entries);
         }
       } catch {
         setLoadingEpisodes(false);
@@ -127,16 +164,28 @@ export function useMediaDetail({
     await jellyfinApi.togglePlayed(serverUrl, accessToken, userId, detail.Id, next);
   };
 
+  const handleRemoveFromPlaylist = async (entry: BaseItemDto) => {
+    if (!serverUrl || !accessToken || !userId || !entry.PlaylistItemId) return;
+    await jellyfinApi.removeFromPlaylist(serverUrl, accessToken, userId, detail.Id, [
+      entry.PlaylistItemId,
+    ]);
+    setCollectionItems((prev) => prev.filter((itemEntry) => itemEntry.PlaylistItemId !== entry.PlaylistItemId));
+  };
+
   return {
     detail,
     seasons,
     selectedSeasonId,
     episodes,
     collectionItems,
+    personCredits,
+    trailers,
+    specialFeatures,
     similar,
     loadingEpisodes,
     handleSeasonChange,
     handleToggleFavorite,
     handleTogglePlayed,
+    handleRemoveFromPlaylist,
   };
 }

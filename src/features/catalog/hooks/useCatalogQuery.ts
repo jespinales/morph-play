@@ -1,14 +1,17 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { jellyfinApi } from '../../../shared/api/jellyfin';
 import { BaseItemDto } from '../../../shared/types/jellyfin';
 
-export type CatalogMode = 'movies' | 'series' | 'collections' | 'favorites' | 'search';
+export type CatalogMode = 'movies' | 'series' | 'collections' | 'playlists' | 'favorites' | 'search';
+
+const CATALOG_PAGE_SIZE = 48;
 
 interface UseCatalogQueryParams {
   mode: CatalogMode;
   sortBy: string;
   sortOrder: 'Ascending' | 'Descending';
   selectedGenre: string;
+  selectedLibraryId: string;
   searchTerm: string;
   locale: string;
   serverUrl: string;
@@ -18,11 +21,27 @@ interface UseCatalogQueryParams {
   mutatedItems: Record<string, BaseItemDto>;
 }
 
+function resolveIncludeTypes(mode: CatalogMode): string {
+  switch (mode) {
+    case 'movies':
+      return 'Movie';
+    case 'series':
+      return 'Series';
+    case 'collections':
+      return 'BoxSet';
+    case 'playlists':
+      return 'Playlist';
+    default:
+      return 'Movie,Series';
+  }
+}
+
 export function useCatalogQuery({
   mode,
   sortBy,
   sortOrder,
   selectedGenre,
+  selectedLibraryId,
   searchTerm,
   locale,
   serverUrl,
@@ -32,8 +51,58 @@ export function useCatalogQuery({
   mutatedItems,
 }: UseCatalogQueryParams) {
   const [items, setItems] = useState<BaseItemDto[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [serverGenres, setServerGenres] = useState<string[]>([]);
+  const [allViews, setAllViews] = useState<BaseItemDto[]>([]);
 
+  // Fetch user views (libraries) once per session/refresh
+  useEffect(() => {
+    let active = true;
+    async function loadViews() {
+      if (!serverUrl || !accessToken || !userId) return;
+      try {
+        const views = await jellyfinApi.getUserViews(serverUrl, accessToken, userId);
+        if (active) setAllViews(views);
+      } catch {
+        if (active) setAllViews([]);
+      }
+    }
+    loadViews();
+    return () => {
+      active = false;
+    };
+  }, [serverUrl, accessToken, userId, refreshSignal]);
+
+  // Fetch authoritative genre list from /Genres
+  useEffect(() => {
+    let active = true;
+    async function loadGenres() {
+      if (!serverUrl || !accessToken || !userId || mode === 'collections' || mode === 'playlists') {
+        setServerGenres([]);
+        return;
+      }
+      try {
+        const list = await jellyfinApi.getGenres(serverUrl, accessToken, userId, {
+          includeItemTypes: resolveIncludeTypes(mode),
+          parentId: selectedLibraryId || undefined,
+        });
+        if (active) setServerGenres(list);
+      } catch {
+        if (active) setServerGenres([]);
+      }
+    }
+    loadGenres();
+    return () => {
+      active = false;
+    };
+  }, [mode, selectedLibraryId, serverUrl, accessToken, userId, refreshSignal]);
+
+  const [localRefresh, setLocalRefresh] = useState(0);
+  const triggerReload = useCallback(() => setLocalRefresh((n) => n + 1), []);
+
+  // Fetch initial page whenever query parameters change
   useEffect(() => {
     let active = true;
     const timer = window.setTimeout(
@@ -41,27 +110,28 @@ export function useCatalogQuery({
         if (!serverUrl || !accessToken || !userId) return;
         setLoading(true);
         try {
-          const includeItemTypes =
-            mode === 'movies'
-              ? 'Movie'
-              : mode === 'series'
-                ? 'Series'
-                : mode === 'collections'
-                  ? 'BoxSet'
-                  : 'Movie,Series';
-
+          if (mode === 'playlists') {
+            const list = await jellyfinApi.getPlaylists(serverUrl, accessToken, userId);
+            if (!active) return;
+            setItems(list);
+            setTotalCount(list.length);
+            return;
+          }
           const res = await jellyfinApi.getItems(serverUrl, accessToken, userId, {
-            includeItemTypes,
+            includeItemTypes: resolveIncludeTypes(mode),
             sortBy,
             sortOrder,
             filters: mode === 'favorites' ? 'IsFavorite' : undefined,
             genres: selectedGenre || undefined,
+            parentId: selectedLibraryId || undefined,
             searchTerm: mode === 'search' ? searchTerm.trim() || undefined : undefined,
-            limit: 120,
+            startIndex: 0,
+            limit: CATALOG_PAGE_SIZE,
           });
 
           if (!active) return;
           setItems(res.Items);
+          setTotalCount(res.TotalRecordCount);
         } finally {
           if (active) setLoading(false);
         }
@@ -73,7 +143,60 @@ export function useCatalogQuery({
       active = false;
       window.clearTimeout(timer);
     };
-  }, [mode, sortBy, sortOrder, selectedGenre, searchTerm, serverUrl, accessToken, userId, refreshSignal]);
+  }, [
+    mode,
+    sortBy,
+    sortOrder,
+    selectedGenre,
+    selectedLibraryId,
+    searchTerm,
+    serverUrl,
+    accessToken,
+    userId,
+    refreshSignal,
+    localRefresh,
+  ]);
+
+  const hasMore = items.length < totalCount;
+
+  const loadMore = useCallback(async () => {
+    if (!serverUrl || !accessToken || !userId || loading || loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const res = await jellyfinApi.getItems(serverUrl, accessToken, userId, {
+        includeItemTypes: resolveIncludeTypes(mode),
+        sortBy,
+        sortOrder,
+        filters: mode === 'favorites' ? 'IsFavorite' : undefined,
+        genres: selectedGenre || undefined,
+        parentId: selectedLibraryId || undefined,
+        searchTerm: mode === 'search' ? searchTerm.trim() || undefined : undefined,
+        startIndex: items.length,
+        limit: CATALOG_PAGE_SIZE,
+      });
+      setItems((prev) => {
+        const seen = new Set(prev.map((i) => i.Id));
+        return [...prev, ...res.Items.filter((i) => !seen.has(i.Id))];
+      });
+      setTotalCount(res.TotalRecordCount);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [
+    serverUrl,
+    accessToken,
+    userId,
+    loading,
+    loadingMore,
+    hasMore,
+    mode,
+    sortBy,
+    sortOrder,
+    selectedGenre,
+    selectedLibraryId,
+    searchTerm,
+    items.length,
+  ]);
 
   const hydratedItems = useMemo(() => {
     const merged = items.map((item) =>
@@ -85,15 +208,30 @@ export function useCatalogQuery({
     return merged;
   }, [items, mutatedItems, mode]);
 
+  const availableLibraries = useMemo(() => {
+    return allViews.filter((v) => {
+      const colType = v.CollectionType?.toLowerCase();
+      if (mode === 'movies') return colType === 'movies';
+      if (mode === 'series') return colType === 'tvshows';
+      if (mode === 'collections') return colType === 'boxsets';
+      return colType === 'movies' || colType === 'tvshows' || !colType;
+    });
+  }, [allViews, mode]);
+
   const availableGenres = useMemo(() => {
-    const set = new Set<string>();
-    items.forEach((item) => item.Genres?.forEach((g) => set.add(g)));
-    return Array.from(set).sort((a, b) => a.localeCompare(b, locale));
-  }, [items, locale]);
+    const source = serverGenres.length > 0 ? serverGenres : items.flatMap((i) => i.Genres ?? []);
+    return Array.from(new Set(source)).sort((a, b) => a.localeCompare(b, locale));
+  }, [serverGenres, items, locale]);
 
   return {
     loading,
+    loadingMore,
+    hasMore,
+    totalCount,
     hydratedItems,
     availableGenres,
+    availableLibraries,
+    loadMore,
+    triggerReload,
   };
 }

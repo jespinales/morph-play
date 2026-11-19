@@ -78,3 +78,27 @@ export async function apiRequest<T>(
     window.clearTimeout(timer);
   }
 }
+
+/** Best-effort keepalive POST for lifecycle events like pagehide / tab close. */
+export function apiKeepalivePost(
+  serverUrl: string,
+  path: string,
+  token: string,
+  body: unknown
+): void {
+  const normalized = normalizeServerUrl(serverUrl);
+  if (!normalized || typeof fetch !== 'function') return;
+  try {
+    void fetch(`${normalized}${path}`, {
+      method: 'POST',
+      headers: {
+        Authorization: buildAuthHeader(token),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      keepalive: true,
+    }).catch(() => {});
+  } catch {
+    // Ignore errors when the browser is tearing down the page
+  }
+}

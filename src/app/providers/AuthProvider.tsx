@@ -2,7 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { DEMO_ACCESS_TOKEN, DEMO_SERVER_URL } from '../../shared/api/demo/demoData';
 import { isDemoServer } from '../../shared/api/demo/demoStore';
 import { jellyfinApi } from '../../shared/api/jellyfin';
-import { PublicSystemInfo, UserDto } from '../../shared/types/jellyfin';
+import { PublicSystemInfo, UserConfiguration, UserDto } from '../../shared/types/jellyfin';
 import { getEnvConfiguredServerUrl } from '../../shared/utils/brand';
 import {
   safeGetStorageItem,
@@ -38,9 +38,12 @@ interface AuthContextValue {
   connectToServer: (url: string) => Promise<PublicSystemInfo>;
   enableDemoMode: () => Promise<void>;
   loginWithCredentials: (username: string, password: string) => Promise<void>;
+  loginWithQuickConnect: (secret: string) => Promise<void>;
   loginWithSavedProfile: (userId: string) => Promise<boolean>;
+  updateUserConfig: (patch: Partial<UserConfiguration>) => Promise<void>;
   removeSavedProfile: (userId: string) => void;
   switchProfile: () => void;
+  logoutSession: () => Promise<void>;
   disconnectServer: () => void;
 }
 
@@ -167,20 +170,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAccessToken(null);
   }, []);
 
+  const applyAuthSession = useCallback(
+    (targetServerUrl: string, authUser: UserDto, rawToken: string) => {
+      const token = isDemoServer(targetServerUrl) ? DEMO_ACCESS_TOKEN : rawToken;
+      setUser(authUser);
+      setAccessToken(token);
+      safeSetStorageItem(STORAGE_TOKEN_KEY, token);
+      safeSetStorageJson(STORAGE_USER_KEY, authUser);
+      upsertSavedProfile(targetServerUrl, authUser, token);
+    },
+    [upsertSavedProfile]
+  );
+
   const loginWithCredentials = useCallback(
     async (username: string, password: string) => {
       if (!serverUrl) {
         throw new Error('No Jellyfin server is connected.');
       }
       const auth = await jellyfinApi.authenticateByName(serverUrl, username, password);
-      const token = isDemoServer(serverUrl) ? DEMO_ACCESS_TOKEN : auth.AccessToken;
-      setUser(auth.User);
-      setAccessToken(token);
-      safeSetStorageItem(STORAGE_TOKEN_KEY, token);
-      safeSetStorageJson(STORAGE_USER_KEY, auth.User);
-      upsertSavedProfile(serverUrl, auth.User, token);
+      applyAuthSession(serverUrl, auth.User, auth.AccessToken);
     },
-    [serverUrl, upsertSavedProfile]
+    [serverUrl, applyAuthSession]
+  );
+
+  const loginWithQuickConnect = useCallback(
+    async (secret: string) => {
+      if (!serverUrl) {
+        throw new Error('No Jellyfin server is connected.');
+      }
+      const auth = await jellyfinApi.authenticateWithQuickConnect(serverUrl, secret);
+      applyAuthSession(serverUrl, auth.User, auth.AccessToken);
+    },
+    [serverUrl, applyAuthSession]
   );
 
   const loginWithSavedProfile = useCallback(
@@ -197,11 +218,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           entry.accessToken,
           entry.user.Id
         );
-        setUser(refreshedUser);
-        setAccessToken(entry.accessToken);
-        safeSetStorageItem(STORAGE_TOKEN_KEY, entry.accessToken);
-        safeSetStorageJson(STORAGE_USER_KEY, refreshedUser);
-        upsertSavedProfile(serverUrl, refreshedUser, entry.accessToken);
+        applyAuthSession(serverUrl, refreshedUser, entry.accessToken);
         return true;
       } catch {
         // Token expired or revoked: keep profile card without token so password can be prompted
@@ -215,19 +232,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return false;
       }
     },
-    [serverUrl, allSavedProfiles, upsertSavedProfile]
+    [serverUrl, allSavedProfiles, applyAuthSession]
+  );
+
+  const updateUserConfig = useCallback(
+    async (patch: Partial<UserConfiguration>) => {
+      if (!serverUrl || !accessToken || !user) return;
+      const mergedConfig: UserConfiguration = {
+        ...user.Configuration,
+        ...patch,
+      };
+      const updatedUser: UserDto = {
+        ...user,
+        Configuration: mergedConfig,
+      };
+      setUser(updatedUser);
+      safeSetStorageJson(STORAGE_USER_KEY, updatedUser);
+      upsertSavedProfile(serverUrl, updatedUser, accessToken);
+      try {
+        await jellyfinApi.updateUserConfiguration(serverUrl, accessToken, user.Id, mergedConfig);
+      } catch {
+        // Ignore network errors while persisting server configuration
+      }
+    },
+    [serverUrl, accessToken, user, upsertSavedProfile]
   );
 
   const removeSavedProfile = useCallback(
     (userId: string) => {
       if (!serverUrl) return;
+      const removed = allSavedProfiles.find(
+        (p) => p.serverUrl === serverUrl && p.user.Id === userId
+      );
+      if (removed?.accessToken) {
+        void jellyfinApi.logout(serverUrl, removed.accessToken).catch(() => {});
+      }
       setAllSavedProfiles((prev) => {
         const next = prev.filter((p) => !(p.serverUrl === serverUrl && p.user.Id === userId));
         safeSetStorageJson(STORAGE_SAVED_PROFILES_KEY, next);
         return next;
       });
     },
-    [serverUrl]
+    [serverUrl, allSavedProfiles]
   );
 
   const switchProfile = useCallback(() => {
@@ -237,7 +283,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAccessToken(null);
   }, []);
 
+  const logoutSession = useCallback(async () => {
+    const activeToken = accessToken;
+    const activeUserId = user?.Id;
+    if (serverUrl && activeToken) {
+      await jellyfinApi.logout(serverUrl, activeToken).catch(() => {});
+    }
+    if (serverUrl && activeUserId) {
+      setAllSavedProfiles((prev) => {
+        const next = prev.map((p) =>
+          p.serverUrl === serverUrl && p.user.Id === activeUserId ? { ...p, accessToken: '' } : p
+        );
+        safeSetStorageJson(STORAGE_SAVED_PROFILES_KEY, next);
+        return next;
+      });
+    }
+    safeRemoveStorageItem(STORAGE_TOKEN_KEY);
+    safeRemoveStorageItem(STORAGE_USER_KEY);
+    setUser(null);
+    setAccessToken(null);
+  }, [serverUrl, accessToken, user?.Id]);
+
   const disconnectServer = useCallback(() => {
+    if (serverUrl && accessToken) {
+      void jellyfinApi.logout(serverUrl, accessToken).catch(() => {});
+    }
     safeRemoveStorageItem(STORAGE_TOKEN_KEY);
     safeRemoveStorageItem(STORAGE_USER_KEY);
     setUser(null);
@@ -247,7 +317,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setServerUrl('');
       setServerInfo(null);
     }
-  }, [isEnvServerLocked]);
+  }, [serverUrl, accessToken, isEnvServerLocked]);
 
   const savedProfiles = useMemo(
     () => allSavedProfiles.filter((entry) => entry.serverUrl === serverUrl),
@@ -268,9 +338,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       connectToServer,
       enableDemoMode,
       loginWithCredentials,
+      loginWithQuickConnect,
       loginWithSavedProfile,
+      updateUserConfig,
       removeSavedProfile,
       switchProfile,
+      logoutSession,
       disconnectServer,
     }),
     [
@@ -284,9 +357,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       connectToServer,
       enableDemoMode,
       loginWithCredentials,
+      loginWithQuickConnect,
       loginWithSavedProfile,
+      updateUserConfig,
       removeSavedProfile,
       switchProfile,
+      logoutSession,
       disconnectServer,
     ]
   );

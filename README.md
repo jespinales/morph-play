@@ -11,21 +11,29 @@ Incluye identidad visual neutra de fábrica y permite personalizar libremente el
 - **Marca e identidad personalizable**:
   - Incluye el nombre neutro **MorphPlay** y un logotipo vectorial propio por defecto.
   - Configurable globalmente mediante variables de entorno (`APP_NAME` y `APP_LOGO_URL`, incluyendo soporte para archivos locales montados en `/brand/`) o en cada navegador desde **Ajustes (`/settings`)** (solo visible para usuarios administradores), junto con el selector de idioma **ES / EN**.
-
-- **Conexión híbrida y sencilla**:
-  - Si defines `JELLYFIN_SERVER_URL` en `docker-compose.yml`, la aplicación se conecta automáticamente a tu servidor y muestra directo el selector de perfiles.
-  - Si no la defines, muestra un asistente visual en el navegador para conectar cualquier servidor Jellyfin (incluyendo un **Modo Demostración** integrado).
-- **Selector de perfiles ("¿Quién está viendo?")**:
-  - Lista los perfiles públicos (`/Users/Public`) y recuerda localmente en el dispositivo las cuentas iniciadas (incluso si el servidor oculta perfiles públicos), con acceso en un clic o modal de contraseña.
-- **Inicio cinematográfico**:
-  - **Hero Banner** adaptable (`16:9` completo a la derecha en escritorio y apilado superior con fundido suave y gestos *swipe* en móvil/tableta), logotipo oficial, valoración, año, clasificación y acciones rápidas.
-  - Carruseles horizontales con soporte táctil y desplazamiento: **Seguir viendo** (con botón discreto `×` para quitar elementos), **Próximos episodios**, **Reciente en Películas**, **Reciente en Series**, **Top 10 mejor valorados**, **Mi lista** y géneros.
-  - Tarjetas limpias (2:3 para pósteres y 16:9 con barra de progreso para continuar viendo) y modal superpuesto de detalles con reparto, temporadas, episodios y títulos similares.
+- **Conexión y perfiles ("¿Quién está viendo?")**:
+  - Conexión automática mediante `JELLYFIN_SERVER_URL` o asistente visual en el navegador (con **Modo Demostración** integrado).
+  - Lista perfiles públicos (`/Users/Public`), recuerda cuentas iniciadas localmente y soporta inicio y autorización de dispositivos mediante **Quick Connect**, cierre de sesión real en servidor (`/Sessions/Logout`) y sincronización de `User.Configuration`.
+- **Inicio cinematográfico y exploración**:
+  - **Hero Banner** adaptable (`16:9` en escritorio y vista optimizada táctil en móvil/tableta) con logotipo, metadatos y acciones rápidas.
+  - Carruseles horizontales: **Seguir viendo** (agrupado a 1 entrada por serie con el último episodio reproducido), **Próximos episodios**, **Recomendado para ti** (`/Items/Suggestions`), **Reciente en Películas**, **Reciente en Series**, **Top 10 mejor valorados**, **Mi lista** y géneros.
+  - Búsqueda instantánea con autocompletado (`/Search/Hints`), catálogos paginados con filtros por biblioteca y género, gestión de **Playlists** de video y modal de detalles con reparto interactivo (filmografía por persona), temporadas, tráilers, extras y títulos similares.
 - **Reproductor de video a medida (`hls.js` + Direct Play)**:
-  - Reproducción adaptativa HLS y Direct Play con previsualización **Trickplay** sobre la barra de progreso, compatibilidad táctil (controles centrales, pantalla completa iOS y menús adaptables) y atajos de teclado (`Espacio`, `J`, `L`, `M`, `F`, `Esc`).
-  - Selector de pistas de audio y subtítulos VTT renderizados mediante overlay cinematográfico propio sobre el reproductor.
-  - Botón flotante **"Saltar intro"** / **"Saltar créditos"** compatible con la API `MediaSegments` de Jellyfin 10.10+.
-  - Aviso y transición automática al **siguiente episodio**, además de sincronización periódica del progreso con el servidor (`/Sessions/Playing/Progress`).
+  - Reproducción adaptativa HLS y Direct Play con selector de versiones (`MediaSources`), **capítulos** con miniaturas sobre la barra de progreso y previsualización **Trickplay**.
+  - Selector de pistas de audio y subtítulos VTT en overlay cinematográfico propio, además de transcodificación con quemado (*burn-in*) para subtítulos gráficos (PGS, VobSub, DVB).
+  - Botón flotante **"Saltar intro"** / **"Saltar créditos"** mediante `MediaSegments`, transición automática al siguiente episodio y atajos de teclado (`Espacio`, `J`, `L`, `M`, `F`, `Esc`).
+  - Control remoto (**Play To / Cast**), visualización sincronizada en grupo (**SyncPlay**) y actualizaciones en vivo mediante WebSocket (`/socket`).
+
+---
+
+## Compatibilidad con la API de Jellyfin
+
+MorphPlay implementa la integración con el servidor basándose en la especificación oficial publicada en [api.jellyfin.org](https://api.jellyfin.org/), tomando como referencia **Jellyfin Server 10.10+** (necesario para `MediaSegments` y `Trickplay`; el resto de capacidades degradan con compatibilidad en versiones previas):
+
+- **Autenticación, usuarios y dispositivos**: Información pública del servidor (`/System/Info/Public`), usuarios públicos, login por credenciales, flujo completo de **Quick Connect** (`Enabled`, `Initiate`, `Connect`, `Authorize`, `AuthenticateWithQuickConnect`), cierre de sesión (`/Sessions/Logout`) y sincronización de configuración de usuario (`/Users/{id}/Configuration`).
+- **Catálogo, descubrimiento y playlists**: Vistas de biblioteca (`/Users/{id}/Views`), elementos para reanudar (`/Users/{id}/Items/Resume`), próximos episodios (`/Shows/NextUp`), recientes (`/Users/{id}/Items/Latest`), sugerencias (`/Items/Suggestions`), consultas paginadas y géneros (`/Users/{id}/Items`, `/Genres`), búsqueda rápida (`/Search/Hints`), temporadas/episodios/similares, tráilers locales (`LocalTrailers`), extras (`SpecialFeatures`), favoritos, estado visto y CRUD completo de listas (`/Playlists`).
+- **Reproducción y recursos multimedia**: Negociación de fuentes (`PlaybackInfo`), Direct Play (`/Videos/{id}/stream`), HLS adaptativo (`/Videos/{id}/master.m3u8`), subtítulos VTT y quemado de gráficos (`SubtitleMethod=Encode`), **MediaSegments** (`/MediaSegments/{id}`), hojas **Trickplay** (`/Videos/{id}/Trickplay`), e imágenes de ítems, capítulos, personas y avatares.
+- **Sesiones, WebSocket y SyncPlay**: Registro de capacidades (`/Sessions/Capabilities/Full`), reporte de reproducción (`/Sessions/Playing`, `Progress`, `Stopped` con `keepalive` en `pagehide`), envío de comandos remotos (`/Sessions/{id}/Playing`), sala compartida **SyncPlay** (`/SyncPlay/List`, `New`, `Join`, `Leave`, `SetNewQueue`, `Pause`, `Unpause`, `Seek`, `Ready`, `Buffering`) y canal `/socket` en tiempo real (`UserDataChanged`, `LibraryChanged`, `Play`, `Playstate`, `SyncPlayCommand`, `SyncPlayGroupUpdate`).
 
 ---
 
@@ -99,35 +107,6 @@ npm run build
 
 # Construir y levantar la imagen Docker localmente en lugar de usar GHCR
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
-```
-
----
-
-## Arquitectura del proyecto
-
-Arquitectura modular por **features** y **capas unidireccionales** (`app/` → `features/` → `shared/`):
-
-```text
-src/
-├── app/
-│   ├── App.tsx                       # Router y composición de modales globales
-│   ├── layout/
-│   │   └── Navbar.tsx                # Barra superior fija y barra inferior adaptativa móvil
-│   └── providers/
-│       ├── AuthProvider.tsx          # Estado de servidor, sesión de usuario y perfiles guardados
-│       └── PreferencesProvider.tsx   # Idioma (locale), marca (brand) y preferencias de reproducción
-├── features/
-│   ├── auth/                         # ServerConnectPage y ProfileSelectPage
-│   ├── catalog/                      # HomePage, CatalogPage, HeroBanner, MediaRow, MediaCard y hooks
-│   ├── media-detail/                 # DetailModal y useMediaDetail
-│   ├── player/                       # VideoPlayerModal, hooks (cola, subtítulos, atajos) y subcomponentes
-│   └── settings/                     # ProfileSettingsPage (idioma, calidad y personalización de marca)
-└── shared/
-    ├── api/                          # client.ts, jellyfin.ts, playback.ts y demo/
-    ├── components/                   # BrandLogo y LanguageSwitcher (componentes puros)
-    ├── i18n/                         # Diccionario tipado EN / ES y tests
-    ├── types/                        # Definiciones TypeScript para esquemas de Jellyfin
-    └── utils/                        # Utilidades puras (time, url, brand, trickplay, subtitles, storage) y tests
 ```
 
 ---

@@ -23,6 +23,7 @@ export function useHomeCatalog({
   const [latestSeries, setLatestSeries] = useState<BaseItemDto[]>([]);
   const [topRated, setTopRated] = useState<BaseItemDto[]>([]);
   const [favorites, setFavorites] = useState<BaseItemDto[]>([]);
+  const [suggestions, setSuggestions] = useState<BaseItemDto[]>([]);
   const [actionMovies, setActionMovies] = useState<BaseItemDto[]>([]);
   const loadedContextRef = useRef<string | null>(null);
   const isMountedRef = useRef(true);
@@ -56,7 +57,7 @@ export function useHomeCatalog({
       }
 
       try {
-        const [resume, nextUp, movies, series, top, favs, actionPrimary] = await Promise.all([
+        const [resume, nextUp, movies, series, top, favs, suggested, actionPrimary] = await Promise.all([
           jellyfinApi.getResumeItems(serverUrl, accessToken, userId).catch(() => []),
           jellyfinApi.getNextUpItems(serverUrl, accessToken, userId).catch(() => []),
           jellyfinApi.getLatestItems(serverUrl, accessToken, userId, 'Movie', 16).catch(() => []),
@@ -78,6 +79,7 @@ export function useHomeCatalog({
             })
             .then((r) => r.Items)
             .catch(() => []),
+          jellyfinApi.getSuggestions(serverUrl, accessToken, userId, 16).catch(() => []),
           jellyfinApi
             .getItems(serverUrl, accessToken, userId, {
               includeItemTypes: 'Movie',
@@ -117,6 +119,7 @@ export function useHomeCatalog({
         setLatestSeries(series);
         setTopRated(top);
         setFavorites(favs);
+        setSuggestions(suggested);
         setActionMovies(action);
         loadedContextRef.current = contextKey;
       } finally {
@@ -183,6 +186,7 @@ export function useHomeCatalog({
     latestSeries,
     topRated,
     favorites,
+    suggestions,
     actionMovies,
     refreshResumeAndNextUp,
     handleRemoveFromResume,

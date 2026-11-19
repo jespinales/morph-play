@@ -10,7 +10,17 @@ import {
   BuiltPlaybackStream,
   qualityToBitrate,
 } from '../../shared/api/playback';
-import { BaseItemDto, MediaSegmentDto, MediaSourceInfo, MediaStream } from '../../shared/types/jellyfin';
+import {
+  BaseItemDto,
+  ChapterInfo,
+  MediaSegmentDto,
+  MediaSourceInfo,
+  MediaStream,
+  PlaystateCommandData,
+  SessionInfoDto,
+  SyncPlayCommandData,
+  SyncPlayGroupDto,
+} from '../../shared/types/jellyfin';
 import { resolveResumeStartSeconds, secondsToTicks, ticksToSeconds } from '../../shared/utils/time';
 import { getTrickplayFrame, selectTrickplayInfo, TrickplaySelection } from '../../shared/utils/trickplay';
 import { NextEpisodeCard } from './components/NextEpisodeCard';
@@ -22,12 +32,19 @@ import { useEpisodeQueue } from './hooks/useEpisodeQueue';
 import { usePlayerKeyboard } from './hooks/usePlayerKeyboard';
 import { useSubtitles } from './hooks/useSubtitles';
 
+export interface PlayerRemoteHandlers {
+  onPlaystate: (cmd: PlaystateCommandData) => void;
+  onSyncPlayCommand: (cmd: SyncPlayCommandData) => void;
+  onSyncPlayGroupUpdate: (data: unknown) => void;
+}
+
 interface VideoPlayerModalProps {
   item: BaseItemDto;
   episodeQueue?: BaseItemDto[];
   onClose: () => void;
   onSyncProgress?: () => Promise<void>;
   onProgressUpdated?: () => void;
+  onRegisterRemoteHandlers?: (handlers: PlayerRemoteHandlers | null) => void;
 }
 
 export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
@@ -36,6 +53,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   onClose,
   onSyncProgress,
   onProgressUpdated,
+  onRegisterRemoteHandlers,
 }) => {
   const { serverUrl, accessToken, user } = useAuth();
   const { preferences, t } = usePreferences();
@@ -56,6 +74,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   const seekFeedbackTimerRef = useRef<number | null>(null);
   const seekSyncTimerRef = useRef<number | null>(null);
   const ignoreNextSeekSyncRef = useRef<boolean>(false);
+  const suppressSyncBroadcastRef = useRef<boolean>(false);
   const menusContainerRef = useRef<HTMLDivElement>(null);
   const lastPointerTypeRef = useRef<string>('mouse');
   const suppressNextVideoClickRef = useRef<boolean>(false);
@@ -68,13 +87,20 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   const [similarItems, setSimilarItems] = useState<BaseItemDto[]>([]);
   const [dismissedPromptId, setDismissedPromptId] = useState<string | null>(null);
 
+  const [mediaSources, setMediaSources] = useState<MediaSourceInfo[]>([]);
   const [mediaSource, setMediaSource] = useState<MediaSourceInfo | null>(null);
+  const [chapters, setChapters] = useState<ChapterInfo[]>([]);
   const [playSessionId, setPlaySessionId] = useState<string | undefined>(undefined);
   const [builtStream, setBuiltStream] = useState<BuiltPlaybackStream | null>(null);
   const [segments, setSegments] = useState<MediaSegmentDto[]>([]);
   const [audioStreams, setAudioStreams] = useState<MediaStream[]>([]);
   const [selectedAudioIndex, setSelectedAudioIndex] = useState<number | undefined>(undefined);
   const [selectedSubtitleIndex, setSelectedSubtitleIndex] = useState<number | -1>(-1);
+  const [castSessions, setCastSessions] = useState<SessionInfoDto[]>([]);
+  const [castStatusMessage, setCastStatusMessage] = useState<string | null>(null);
+  const [syncPlayGroups, setSyncPlayGroups] = useState<SyncPlayGroupDto[]>([]);
+  const [activeSyncPlayGroup, setActiveSyncPlayGroup] = useState<SyncPlayGroupDto | null>(null);
+  const [syncPlayGroupInput, setSyncPlayGroupInput] = useState<string>('');
 
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [isBuffering, setIsBuffering] = useState<boolean>(true);
@@ -160,7 +186,10 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     async function loadPlayback() {
       setLoadingStream(true);
       setBuiltStream(null);
+      setMediaSources([]);
       setMediaSource(null);
+      setChapters([]);
+      setCastStatusMessage(null);
       setResumePrompt(null);
       setStreamError(null);
       setOpenMenu(null);
@@ -260,13 +289,16 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
             source,
             playbackInfo.PlaySessionId,
             preferredAudio?.Index,
-            preferences.quality
+            preferences.quality,
+            preferredSub?.Index
           ),
           startSeconds,
           durationSeconds: totalDuration,
         };
 
+        setMediaSources(playbackInfo.MediaSources ?? [source]);
         setMediaSource(source);
+        setChapters(itemDetail?.Chapters ?? activeItem.Chapters ?? []);
         setPlaySessionId(playbackInfo.PlaySessionId);
         setAudioStreams(audios);
         setSelectedAudioIndex(preferredAudio?.Index);
@@ -517,6 +549,9 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     }
 
     const syncBeforeClose = (async () => {
+      if (serverUrl && accessToken && activeSyncPlayGroup) {
+        await jellyfinApi.leaveSyncPlayGroup(serverUrl, accessToken).catch(() => {});
+      }
       if (serverUrl && accessToken && mediaSource) {
         await jellyfinApi
           .reportPlaybackStopped(serverUrl, accessToken, {
@@ -548,6 +583,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     playSessionId,
     builtStream?.startSeconds,
     resumePrompt,
+    activeSyncPlayGroup,
     onSyncProgress,
     onProgressUpdated,
     onClose,
@@ -686,6 +722,91 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     bumpControls();
   };
 
+  // Load remote controllable sessions when Cast menu opens
+  useEffect(() => {
+    if (openMenu !== 'cast' || !serverUrl || !accessToken || !user) return;
+    let active = true;
+    setCastStatusMessage(null);
+    void jellyfinApi.getControllableSessions(serverUrl, accessToken, user.Id).then((sessions) => {
+      if (active) setCastSessions(sessions);
+    });
+    return () => {
+      active = false;
+    };
+  }, [openMenu, serverUrl, accessToken, user]);
+
+  // Load SyncPlay rooms when SyncPlay menu opens
+  useEffect(() => {
+    if (openMenu !== 'syncplay' || !serverUrl || !accessToken) return;
+    let active = true;
+    void jellyfinApi.getSyncPlayGroups(serverUrl, accessToken).then((groups) => {
+      if (active) setSyncPlayGroups(groups);
+    });
+    return () => {
+      active = false;
+    };
+  }, [openMenu, serverUrl, accessToken]);
+
+  const handleCreateSyncPlayGroup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!serverUrl || !accessToken) return;
+    const roomName = syncPlayGroupInput.trim() || `${titleDisplay}`;
+    await jellyfinApi.createSyncPlayGroup(serverUrl, accessToken, roomName);
+    const groups = await jellyfinApi.getSyncPlayGroups(serverUrl, accessToken);
+    setSyncPlayGroups(groups);
+    const created = groups.find((g) => g.GroupName === roomName) ?? groups[0] ?? { GroupId: 'active', GroupName: roomName };
+    setActiveSyncPlayGroup(created);
+    setSyncPlayGroupInput('');
+    await jellyfinApi.setSyncPlayQueue(
+      serverUrl,
+      accessToken,
+      [activeItem.Id],
+      0,
+      secondsToTicks(videoRef.current?.currentTime ?? currentTime)
+    );
+    setOpenMenu(null);
+  };
+
+  const handleJoinSyncPlayGroup = async (group: SyncPlayGroupDto) => {
+    if (!serverUrl || !accessToken) return;
+    await jellyfinApi.joinSyncPlayGroup(serverUrl, accessToken, group.GroupId);
+    setActiveSyncPlayGroup(group);
+    setOpenMenu(null);
+    await jellyfinApi.syncPlayReady(serverUrl, accessToken, {
+      When: new Date().toISOString(),
+      PositionTicks: secondsToTicks(videoRef.current?.currentTime ?? currentTime),
+      IsPlaying: !videoRef.current?.paused,
+    });
+  };
+
+  const handleLeaveSyncPlayGroup = async () => {
+    if (!serverUrl || !accessToken) return;
+    await jellyfinApi.leaveSyncPlayGroup(serverUrl, accessToken).catch(() => {});
+    setActiveSyncPlayGroup(null);
+    setOpenMenu(null);
+  };
+
+  // Report playback stopped with keepalive if the browser tab is closed abruptly
+  useEffect(() => {
+    if (!serverUrl || !accessToken || !mediaSource || !builtStream) return;
+    const onPageHide = () => {
+      if (isClosingRef.current) return;
+      const vid = videoRef.current;
+      const ticks =
+        vid && (vid.readyState >= 1 || vid.currentTime > 0)
+          ? secondsToTicks(vid.currentTime)
+          : lastReportedTicksRef.current;
+      jellyfinApi.reportPlaybackStoppedKeepalive(serverUrl, accessToken, {
+        ItemId: activeItem.Id,
+        MediaSourceId: mediaSource.Id,
+        PlaySessionId: playSessionId,
+        PositionTicks: ticks,
+      });
+    };
+    window.addEventListener('pagehide', onPageHide);
+    return () => window.removeEventListener('pagehide', onPageHide);
+  }, [serverUrl, accessToken, mediaSource, builtStream, activeItem.Id, playSessionId]);
+
   const handleSwitchAudio = (audioIdx: number) => {
     if (!serverUrl || !accessToken || !mediaSource) return;
     const savedTime = videoRef.current?.currentTime ?? 0;
@@ -699,12 +820,111 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         mediaSource,
         playSessionId,
         audioIdx,
-        preferences.quality
+        preferences.quality,
+        selectedSubtitleIndex
       ),
       startSeconds: savedTime > 0 ? savedTime : 0,
       durationSeconds: builtStream?.durationSeconds ?? duration,
     };
     setBuiltStream(updatedStream);
+  };
+
+  const handleSelectMediaSource = (nextSource: MediaSourceInfo) => {
+    if (!serverUrl || !accessToken || nextSource.Id === mediaSource?.Id) {
+      setOpenMenu(null);
+      return;
+    }
+    const savedTime = videoRef.current?.currentTime ?? 0;
+    const audios = (nextSource.MediaStreams ?? []).filter((s) => s.Type === 'Audio');
+    const nextAudio =
+      audios.find((a) => a.Language?.toLowerCase() === preferences.preferredAudioLang) ??
+      audios.find((a) => a.Index === nextSource.DefaultAudioStreamIndex) ??
+      audios[0];
+    const subs = (nextSource.MediaStreams ?? []).filter((s) => s.Type === 'Subtitle');
+    const nextSub =
+      preferences.preferredSubtitleLang === 'none'
+        ? undefined
+        : subs.find((s) => s.Language?.toLowerCase() === preferences.preferredSubtitleLang) ??
+          subs.find((s) => s.Index === nextSource.DefaultSubtitleStreamIndex);
+
+    const nextDuration = ticksToSeconds(nextSource.RunTimeTicks ?? activeItem.RunTimeTicks);
+    setMediaSource(nextSource);
+    setAudioStreams(audios);
+    setSelectedAudioIndex(nextAudio?.Index);
+    setSelectedSubtitleIndex(nextSub?.Index ?? -1);
+    setTrickplay(selectTrickplayInfo(activeItem, nextSource.Id));
+    setDuration(nextDuration);
+    setOpenMenu(null);
+    setBuiltStream({
+      ...buildPlaybackStream(
+        serverUrl,
+        accessToken,
+        activeItem.Id,
+        nextSource,
+        playSessionId,
+        nextAudio?.Index,
+        preferences.quality,
+        nextSub?.Index
+      ),
+      startSeconds: savedTime > 0 ? savedTime : 0,
+      durationSeconds: nextDuration,
+    });
+  };
+
+  const handleSelectSubtitle = (subIdx: number) => {
+    const prevWasEncoded = builtStream?.encodedSubtitleIndex !== undefined;
+    const nextOption = builtStream?.allSubtitles.find((s) => s.index === subIdx);
+    const nextNeedsEncode = nextOption?.delivery === 'encode';
+
+    setSelectedSubtitleIndex(subIdx);
+    setOpenMenu(null);
+
+    if ((prevWasEncoded || nextNeedsEncode) && serverUrl && accessToken && mediaSource) {
+      const savedTime = videoRef.current?.currentTime ?? 0;
+      setBuiltStream({
+        ...buildPlaybackStream(
+          serverUrl,
+          accessToken,
+          activeItem.Id,
+          mediaSource,
+          playSessionId,
+          selectedAudioIndex,
+          preferences.quality,
+          subIdx
+        ),
+        startSeconds: savedTime > 0 ? savedTime : 0,
+        durationSeconds: builtStream?.durationSeconds ?? duration,
+      });
+    }
+  };
+
+  const handleSelectChapter = (startSeconds: number) => {
+    if (videoRef.current) {
+      videoRef.current.currentTime = startSeconds;
+    }
+    setCurrentTime(startSeconds);
+    setOpenMenu(null);
+    bumpControls();
+  };
+
+  const handleCastToSession = async (session: SessionInfoDto) => {
+    if (!serverUrl || !accessToken) return;
+    try {
+      const startTicks = secondsToTicks(videoRef.current?.currentTime ?? currentTime);
+      await jellyfinApi.sendRemotePlayCommand(
+        serverUrl,
+        accessToken,
+        session.Id,
+        [activeItem.Id],
+        startTicks
+      );
+      if (videoRef.current && !videoRef.current.paused) {
+        videoRef.current.pause();
+      }
+      setCastStatusMessage(t.player.castSent(session.DeviceName || session.Client || session.Id));
+    } catch {
+      // Keep UI interactive if remote command fails
+    }
   };
 
   const handlePlayNextEpisode = useCallback(() => {
@@ -726,6 +946,87 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     }
     setActiveItem(nextEpisode);
   }, [nextEpisode, serverUrl, accessToken, mediaSource, activeItem.Id, playSessionId, duration, onProgressUpdated, setActiveItem]);
+
+  // Register WebSocket Playstate & SyncPlay handlers while player is mounted
+  useEffect(() => {
+    if (!onRegisterRemoteHandlers) return;
+
+    const runSuppressed = (fn: () => void) => {
+      suppressSyncBroadcastRef.current = true;
+      try {
+        fn();
+      } finally {
+        window.setTimeout(() => {
+          suppressSyncBroadcastRef.current = false;
+        }, 350);
+      }
+    };
+
+    onRegisterRemoteHandlers({
+      onPlaystate: (cmd) => {
+        const video = videoRef.current;
+        if (!video) return;
+        switch (cmd.Command) {
+          case 'Pause':
+            video.pause();
+            break;
+          case 'Unpause':
+            video.play().catch(() => {});
+            break;
+          case 'PlayPause':
+            if (video.paused) video.play().catch(() => {});
+            else video.pause();
+            break;
+          case 'Seek':
+            if (typeof cmd.SeekPositionTicks === 'number') {
+              const target = ticksToSeconds(cmd.SeekPositionTicks);
+              video.currentTime = target;
+              setCurrentTime(target);
+            }
+            break;
+          case 'Stop':
+            void handleClosePlayer();
+            break;
+          case 'NextTrack':
+            handlePlayNextEpisode();
+            break;
+        }
+      },
+      onSyncPlayCommand: (cmd) => {
+        const video = videoRef.current;
+        if (!video) return;
+        runSuppressed(() => {
+          if (typeof cmd.PositionTicks === 'number') {
+            const target = ticksToSeconds(cmd.PositionTicks);
+            if (Math.abs(video.currentTime - target) > 1.5) {
+              video.currentTime = target;
+              setCurrentTime(target);
+            }
+          }
+          if (cmd.Command === 'Pause') {
+            video.pause();
+          } else if (cmd.Command === 'Unpause') {
+            video.play().catch(() => {});
+          } else if (cmd.Command === 'Stop') {
+            void handleClosePlayer();
+          }
+        });
+      },
+      onSyncPlayGroupUpdate: (data) => {
+        if (!data || typeof data !== 'object') return;
+        const payload = data as { Type?: string; GroupId?: string };
+        if (payload.Type === 'UserLeft' || payload.Type === 'GroupLeft') {
+          setActiveSyncPlayGroup(null);
+        } else if (serverUrl && accessToken && openMenu === 'syncplay') {
+          void jellyfinApi.getSyncPlayGroups(serverUrl, accessToken).then(setSyncPlayGroups);
+        }
+      },
+    });
+
+    return () => {
+      onRegisterRemoteHandlers(null);
+    };
+  }, [onRegisterRemoteHandlers, serverUrl, accessToken, openMenu, handleClosePlayer, handlePlayNextEpisode]);
 
   const handleReplay = useCallback(() => {
     setHasEnded(false);
@@ -852,7 +1153,12 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
             toggleFullscreen();
           }
         }}
-        onPlay={() => setIsPlaying(true)}
+        onPlay={() => {
+          setIsPlaying(true);
+          if (activeSyncPlayGroup && !suppressSyncBroadcastRef.current && serverUrl && accessToken) {
+            void jellyfinApi.syncPlayUnpause(serverUrl, accessToken).catch(() => {});
+          }
+        }}
         onPlaying={() => {
           setIsPlaying(true);
           clearBuffering();
@@ -862,6 +1168,9 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           clearBuffering();
           if (!isClosingRef.current && e.currentTarget.readyState >= 1) {
             void syncPlaybackProgress(true, true);
+            if (activeSyncPlayGroup && !suppressSyncBroadcastRef.current && serverUrl && accessToken) {
+              void jellyfinApi.syncPlayPause(serverUrl, accessToken).catch(() => {});
+            }
           }
         }}
         onWaiting={(e) => {
@@ -879,6 +1188,11 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
             return;
           }
           if (isClosingRef.current) return;
+          if (activeSyncPlayGroup && !suppressSyncBroadcastRef.current && serverUrl && accessToken && videoRef.current) {
+            void jellyfinApi
+              .syncPlaySeek(serverUrl, accessToken, secondsToTicks(videoRef.current.currentTime))
+              .catch(() => {});
+          }
           if (seekSyncTimerRef.current) {
             window.clearTimeout(seekSyncTimerRef.current);
           }
@@ -1098,6 +1412,16 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           isFullscreen={isFullscreen}
           playbackRate={playbackRate}
           openMenu={openMenu}
+          serverUrl={serverUrl}
+          itemId={activeItem.Id}
+          chapters={chapters}
+          mediaSources={mediaSources}
+          selectedMediaSourceId={mediaSource?.Id}
+          castSessions={castSessions}
+          castStatusMessage={castStatusMessage}
+          syncPlayGroups={syncPlayGroups}
+          activeSyncPlayGroup={activeSyncPlayGroup}
+          syncPlayGroupInput={syncPlayGroupInput}
           nextEpisode={nextEpisode}
           audioStreams={audioStreams}
           selectedAudioIndex={selectedAudioIndex}
@@ -1137,11 +1461,15 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           }}
           onPlayNextEpisode={handlePlayNextEpisode}
           onToggleMenu={(menu) => setOpenMenu((m) => (m === menu ? null : menu))}
+          onSelectChapter={handleSelectChapter}
+          onSelectMediaSource={handleSelectMediaSource}
+          onCastToSession={handleCastToSession}
+          onSyncPlayGroupInputChange={setSyncPlayGroupInput}
+          onCreateSyncPlayGroup={handleCreateSyncPlayGroup}
+          onJoinSyncPlayGroup={handleJoinSyncPlayGroup}
+          onLeaveSyncPlayGroup={handleLeaveSyncPlayGroup}
           onSelectAudio={handleSwitchAudio}
-          onSelectSubtitle={(subIdx) => {
-            setSelectedSubtitleIndex(subIdx);
-            setOpenMenu(null);
-          }}
+          onSelectSubtitle={handleSelectSubtitle}
           onSelectPlaybackRate={(rate) => {
             setPlaybackRate(rate);
             if (videoRef.current) videoRef.current.playbackRate = rate;

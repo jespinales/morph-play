@@ -6,6 +6,7 @@ import {
   Loader2,
   Lock,
   PlusCircle,
+  QrCode,
   RefreshCw,
   Server,
   User as UserIcon,
@@ -27,6 +28,7 @@ export const ProfileSelectPage: React.FC = () => {
     isDemo,
     savedProfiles,
     loginWithCredentials,
+    loginWithQuickConnect,
     loginWithSavedProfile,
     removeSavedProfile,
     disconnectServer,
@@ -36,6 +38,11 @@ export const ProfileSelectPage: React.FC = () => {
   const [publicUsers, setPublicUsers] = useState<UserDto[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [qcEnabled, setQcEnabled] = useState(false);
+  const [qcModalOpen, setQcModalOpen] = useState(false);
+  const [qcCode, setQcCode] = useState<string | null>(null);
+  const [qcSecret, setQcSecret] = useState<string | null>(null);
+  const [qcError, setQcError] = useState<string | null>(null);
 
   const [selectedUser, setSelectedUser] = useState<UserDto | null>(null);
   const [manualModalOpen, setManualModalOpen] = useState(false);
@@ -49,10 +56,14 @@ export const ProfileSelectPage: React.FC = () => {
     setLoadingUsers(true);
     setFetchError(null);
     try {
-      const users = await jellyfinApi.getPublicUsers(serverUrl);
+      const [users, quickConnectOk] = await Promise.all([
+        jellyfinApi.getPublicUsers(serverUrl),
+        jellyfinApi.isQuickConnectEnabled(serverUrl),
+      ]);
       setPublicUsers(users);
+      setQcEnabled(quickConnectOk);
       // Only open manual sign-in automatically when no local profiles are remembered
-      if (users.length === 0 && savedProfiles.length === 0) {
+      if (users.length === 0 && savedProfiles.length === 0 && !quickConnectOk) {
         setManualModalOpen(true);
       }
     } catch {
@@ -66,6 +77,43 @@ export const ProfileSelectPage: React.FC = () => {
     loadPublicUsers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serverUrl]);
+
+  useEffect(() => {
+    if (!qcModalOpen || !qcSecret || !serverUrl) return;
+    let active = true;
+    const poll = window.setInterval(async () => {
+      try {
+        const res = await jellyfinApi.connectQuickConnect(serverUrl, qcSecret);
+        if (!active) return;
+        if (res.Authenticated) {
+          window.clearInterval(poll);
+          await loginWithQuickConnect(qcSecret);
+        }
+      } catch {
+        // Keep polling until the user cancels or expires
+      }
+    }, 2500);
+
+    return () => {
+      active = false;
+      window.clearInterval(poll);
+    };
+  }, [qcModalOpen, qcSecret, serverUrl, loginWithQuickConnect]);
+
+  const startQuickConnect = async () => {
+    if (!serverUrl) return;
+    setQcModalOpen(true);
+    setQcCode(null);
+    setQcSecret(null);
+    setQcError(null);
+    try {
+      const init = await jellyfinApi.initiateQuickConnect(serverUrl);
+      setQcCode(init.Code);
+      setQcSecret(init.Secret);
+    } catch {
+      setQcError(t.profiles.quickConnectError);
+    }
+  };
 
   const savedProfileMap = useMemo(() => {
     const map = new Map<string, (typeof savedProfiles)[number]>();
@@ -295,6 +343,21 @@ export const ProfileSelectPage: React.FC = () => {
                 {t.profiles.otherAccount}
               </span>
             </button>
+
+            {qcEnabled && (
+              <button
+                type="button"
+                onClick={startQuickConnect}
+                className="group flex flex-col items-center gap-3 w-28 sm:w-36 focus:outline-none"
+              >
+                <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-2xl bg-[#00A4DC]/[0.08] hover:bg-[#00A4DC]/[0.16] border-2 border-dashed border-[#00A4DC]/40 group-hover:border-[#00A4DC] flex items-center justify-center transition-all duration-200 group-hover:scale-105">
+                  <QrCode className="w-10 h-10 text-[#00A4DC]" />
+                </div>
+                <span className="text-sm sm:text-base font-medium text-zinc-300 group-hover:text-white transition-colors">
+                  {t.profiles.quickConnect}
+                </span>
+              </button>
+            )}
           </div>
         )}
       </main>
@@ -396,6 +459,70 @@ export const ProfileSelectPage: React.FC = () => {
                 )}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Connect modal */}
+      {qcModalOpen && (
+        <div
+          onClick={() => setQcModalOpen(false)}
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-2xl bg-[#12131a] border border-white/15 p-6 shadow-2xl space-y-5 animate-scaleIn relative text-center"
+          >
+            <button
+              type="button"
+              onClick={() => setQcModalOpen(false)}
+              aria-label={t.profiles.closeAria}
+              className="absolute top-3 right-3 w-9 h-9 rounded-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/10"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="w-12 h-12 rounded-2xl bg-[#00A4DC]/15 border border-[#00A4DC]/30 text-[#00A4DC] flex items-center justify-center mx-auto">
+              <QrCode className="w-6 h-6" />
+            </div>
+
+            <div className="space-y-1.5">
+              <h2 className="text-xl font-bold text-white">{t.profiles.quickConnect}</h2>
+              <p className="text-xs text-zinc-400 leading-relaxed">{t.profiles.quickConnectDesc}</p>
+            </div>
+
+            {qcError ? (
+              <div className="space-y-3">
+                <p className="text-xs text-rose-400 flex items-center justify-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  {qcError}
+                </p>
+                <button
+                  type="button"
+                  onClick={startQuickConnect}
+                  className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-semibold text-white"
+                >
+                  {t.profiles.retry}
+                </button>
+              </div>
+            ) : qcCode ? (
+              <div className="space-y-3">
+                <div
+                  aria-label={t.profiles.quickConnectCodeLabel}
+                  className="rounded-2xl bg-[#0a0a0e] border border-[#00A4DC]/40 py-4 px-6 text-3xl sm:text-4xl font-mono font-extrabold tracking-[0.3em] text-white shadow-inner"
+                >
+                  {qcCode}
+                </div>
+                <p className="text-xs text-zinc-400 flex items-center justify-center gap-2">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-[#00A4DC]" />
+                  {t.profiles.quickConnectWaiting}
+                </p>
+              </div>
+            ) : (
+              <div className="py-4 flex justify-center">
+                <Loader2 className="w-8 h-8 animate-spin text-[#00A4DC]" />
+              </div>
+            )}
           </div>
         </div>
       )}

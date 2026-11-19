@@ -37,6 +37,7 @@ export const HomePage: React.FC<HomePageProps> = ({
     latestSeries,
     topRated,
     favorites,
+    suggestions,
     actionMovies,
     refreshResumeAndNextUp,
     handleRemoveFromResume,
@@ -134,6 +135,16 @@ export const HomePage: React.FC<HomePageProps> = ({
           onOpenDetail={onOpenDetail}
           onToggleFavorite={onToggleFavorite}
         />
+
+        {suggestions.length > 0 && (
+          <MediaRow
+            title={t.home.recommendedForYou}
+            items={hydrate(suggestions)}
+            onPlay={onPlay}
+            onOpenDetail={onOpenDetail}
+            onToggleFavorite={onToggleFavorite}
+          />
+        )}
 
         <MediaRow
           title={t.home.topRated}

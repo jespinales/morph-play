@@ -1,16 +1,27 @@
-import React from 'react';
-import { Globe, LogOut, Palette, RotateCcw, Server, Sliders, Users } from 'lucide-react';
+import React, { useState } from 'react';
+import { Globe, LogOut, Palette, QrCode, RotateCcw, Server, Sliders, Users } from 'lucide-react';
 import { useAuth } from '../../app/providers/AuthProvider';
 import { usePreferences } from '../../app/providers/PreferencesProvider';
+import { jellyfinApi } from '../../shared/api/jellyfin';
 import { getUserAvatarUrl } from '../../shared/api/playback';
 import { BrandLogo } from '../../shared/components/BrandLogo';
 import { LanguageSwitcher } from '../../shared/components/LanguageSwitcher';
-import { StreamingQuality } from '../../shared/types/jellyfin';
+import { StreamingQuality, UserPreferences } from '../../shared/types/jellyfin';
 import { isSafeLogoUrl } from '../../shared/utils/url';
 
 export const ProfileSettingsPage: React.FC = () => {
-  const { user, serverUrl, serverInfo, isEnvServerLocked, isDemo, switchProfile, disconnectServer } =
-    useAuth();
+  const {
+    user,
+    serverUrl,
+    accessToken,
+    serverInfo,
+    isEnvServerLocked,
+    isDemo,
+    switchProfile,
+    logoutSession,
+    disconnectServer,
+    updateUserConfig,
+  } = useAuth();
   const {
     preferences,
     brand,
@@ -22,6 +33,45 @@ export const ProfileSettingsPage: React.FC = () => {
     updateBrand,
     resetBrand,
   } = usePreferences();
+
+  const [qcAuthCode, setQcAuthCode] = useState('');
+  const [qcAuthBusy, setQcAuthBusy] = useState(false);
+  const [qcAuthStatus, setQcAuthStatus] = useState<'idle' | 'success' | 'error'>('idle');
+
+  const handlePreferenceChange = (patch: Partial<UserPreferences>) => {
+    updatePreferences(patch);
+    const configPatch: Record<string, unknown> = {};
+    if (patch.preferredAudioLang !== undefined) {
+      configPatch.AudioLanguagePreference = patch.preferredAudioLang;
+    }
+    if (patch.preferredSubtitleLang !== undefined) {
+      configPatch.SubtitleLanguagePreference =
+        patch.preferredSubtitleLang === 'none' ? '' : patch.preferredSubtitleLang;
+      configPatch.SubtitleMode = patch.preferredSubtitleLang === 'none' ? 'None' : 'Default';
+    }
+    if (patch.autoPlayNextEpisode !== undefined) {
+      configPatch.EnableNextEpisodeAutoPlay = patch.autoPlayNextEpisode;
+    }
+    if (Object.keys(configPatch).length > 0) {
+      void updateUserConfig(configPatch);
+    }
+  };
+
+  const handleAuthorizeQuickConnect = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!serverUrl || !accessToken || !qcAuthCode.trim()) return;
+    setQcAuthBusy(true);
+    setQcAuthStatus('idle');
+    try {
+      const ok = await jellyfinApi.authorizeQuickConnect(serverUrl, accessToken, qcAuthCode);
+      setQcAuthStatus(ok ? 'success' : 'error');
+      if (ok) setQcAuthCode('');
+    } catch {
+      setQcAuthStatus('error');
+    } finally {
+      setQcAuthBusy(false);
+    }
+  };
 
   const qualityOptions: Array<{ value: StreamingQuality; label: string; desc: string }> = [
     { value: 'auto', label: t.settings.qualityAutoLabel, desc: t.settings.qualityAutoDesc },
@@ -72,6 +122,15 @@ export const ProfileSettingsPage: React.FC = () => {
           >
             <Users className="w-4 h-4" />
             {t.settings.switchProfile}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => void logoutSession()}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-sm font-semibold text-white transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+            {t.settings.logoutSession}
           </button>
 
           {!isEnvServerLocked && (
@@ -150,7 +209,7 @@ export const ProfileSettingsPage: React.FC = () => {
               name="autoPlayNextEpisode"
               type="checkbox"
               checked={preferences.autoPlayNextEpisode}
-              onChange={(e) => updatePreferences({ autoPlayNextEpisode: e.target.checked })}
+              onChange={(e) => handlePreferenceChange({ autoPlayNextEpisode: e.target.checked })}
               className="w-5 h-5 accent-[#00A4DC] rounded cursor-pointer"
             />
           </label>
@@ -180,7 +239,7 @@ export const ProfileSettingsPage: React.FC = () => {
             <select
               id="audio-lang"
               value={preferences.preferredAudioLang}
-              onChange={(e) => updatePreferences({ preferredAudioLang: e.target.value })}
+              onChange={(e) => handlePreferenceChange({ preferredAudioLang: e.target.value })}
               className="w-full bg-[#0a0a0e] border border-white/15 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-[#00A4DC]"
             >
               <option value="spa">{t.settings.langSpa}</option>
@@ -198,7 +257,7 @@ export const ProfileSettingsPage: React.FC = () => {
             <select
               id="sub-lang"
               value={preferences.preferredSubtitleLang}
-              onChange={(e) => updatePreferences({ preferredSubtitleLang: e.target.value })}
+              onChange={(e) => handlePreferenceChange({ preferredSubtitleLang: e.target.value })}
               className="w-full bg-[#0a0a0e] border border-white/15 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-[#00A4DC]"
             >
               <option value="spa">{t.settings.langSpa}</option>
@@ -207,6 +266,47 @@ export const ProfileSettingsPage: React.FC = () => {
             </select>
           </div>
         </div>
+      </section>
+
+      {/* Authorize Quick Connect */}
+      <section className="rounded-2xl bg-[#12131a] border border-white/10 p-6 space-y-4">
+        <div className="flex items-center gap-2.5">
+          <QrCode className="w-5 h-5 text-[#00A4DC] shrink-0" />
+          <div>
+            <h2 className="text-lg font-bold text-white">{t.settings.quickConnectAuthTitle}</h2>
+            <p className="text-xs text-zinc-400">{t.settings.quickConnectAuthDesc}</p>
+          </div>
+        </div>
+
+        <form onSubmit={handleAuthorizeQuickConnect} className="flex flex-col sm:flex-row gap-3">
+          <input
+            id="qc-authorize-code"
+            name="qcCode"
+            type="text"
+            inputMode="numeric"
+            value={qcAuthCode}
+            onChange={(e) => {
+              setQcAuthCode(e.target.value);
+              if (qcAuthStatus !== 'idle') setQcAuthStatus('idle');
+            }}
+            placeholder={t.settings.quickConnectCodePlaceholder}
+            className="flex-1 bg-[#0a0a0e] border border-white/15 rounded-xl px-4 py-2.5 text-sm font-mono tracking-widest text-white placeholder-zinc-500 focus:outline-none focus:border-[#00A4DC]"
+          />
+          <button
+            type="submit"
+            disabled={qcAuthBusy || !qcAuthCode.trim()}
+            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#AA5CC3] to-[#00A4DC] text-white font-semibold text-sm hover:opacity-95 disabled:opacity-50 transition-opacity"
+          >
+            {t.settings.authorizeBtn}
+          </button>
+        </form>
+
+        {qcAuthStatus === 'success' && (
+          <p className="text-xs text-emerald-400 font-medium">{t.settings.authorizeSuccess}</p>
+        )}
+        {qcAuthStatus === 'error' && (
+          <p className="text-xs text-rose-400 font-medium">{t.settings.authorizeError}</p>
+        )}
       </section>
 
       {/* Custom branding (administrator profiles only) */}

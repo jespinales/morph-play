@@ -96,6 +96,19 @@ export function getPersonImageUrl(
   return `${normalizeServerUrl(serverUrl)}/Items/${personId}/Images/Primary?maxWidth=240&quality=85&tag=${primaryImageTag}`;
 }
 
+export function getChapterImageUrl(
+  serverUrl: string,
+  itemId: string,
+  chapterIndex: number,
+  imageTag?: string,
+  maxWidth = 360
+): string | null {
+  if (isDemoServer(serverUrl) || !imageTag) return null;
+  const base = normalizeServerUrl(serverUrl);
+  if (!base) return null;
+  return `${base}/Items/${itemId}/Images/Chapter/${chapterIndex}?maxWidth=${maxWidth}&quality=85&tag=${encodeURIComponent(imageTag)}`;
+}
+
 export function qualityToBitrate(quality: StreamingQuality): number {
   switch (quality) {
     case '1080p':
@@ -110,6 +123,15 @@ export function qualityToBitrate(quality: StreamingQuality): number {
   }
 }
 
+export interface PlayerSubtitleOption {
+  index: number;
+  label: string;
+  language: string;
+  delivery: 'external' | 'encode';
+  src?: string;
+  isDefault: boolean;
+}
+
 export interface BuiltPlaybackStream {
   streamUrl: string;
   fallbackUrl?: string;
@@ -117,6 +139,8 @@ export interface BuiltPlaybackStream {
   playMethod: 'DirectPlay' | 'DirectStream' | 'Transcode';
   startSeconds?: number;
   durationSeconds?: number;
+  encodedSubtitleIndex?: number;
+  allSubtitles: PlayerSubtitleOption[];
   subtitleTracks: Array<{
     index: number;
     label: string;
@@ -126,6 +150,8 @@ export interface BuiltPlaybackStream {
   }>;
 }
 
+const IMAGE_SUBTITLE_CODECS = new Set(['pgssub', 'pgs', 'dvdsub', 'dvbsub', 'vobsub', 'xsub']);
+
 export function buildPlaybackStream(
   serverUrl: string,
   token: string,
@@ -133,7 +159,8 @@ export function buildPlaybackStream(
   mediaSource: MediaSourceInfo,
   playSessionId: string | undefined,
   audioStreamIndex: number | undefined,
-  quality: StreamingQuality
+  quality: StreamingQuality,
+  subtitleStreamIndex?: number
 ): BuiltPlaybackStream {
   if (isDemoServer(serverUrl)) {
     return {
@@ -141,31 +168,53 @@ export function buildPlaybackStream(
       fallbackUrl: DEMO_MP4_FALLBACK,
       isHls: true,
       playMethod: 'Transcode',
+      allSubtitles: [],
       subtitleTracks: [],
     };
   }
 
   const base = normalizeServerUrl(serverUrl);
-  const subtitleTracks = (mediaSource.MediaStreams ?? [])
-    .filter(
-      (s) =>
-        s.Type === 'Subtitle' &&
-        (s.SupportsExternalStream ||
-          s.IsExternal ||
-          s.Codec === 'subrip' ||
-          s.Codec === 'srt' ||
-          s.Codec === 'vtt')
-    )
-    .map((s) => ({
-      index: s.Index,
-      label: s.DisplayTitle || s.Title || s.Language || `Subtitle ${s.Index}`,
-      language: s.Language || 'en',
-      src: `${base}/Videos/${itemId}/${mediaSource.Id}/Subtitles/${s.Index}/0/Stream.vtt?api_key=${encodeURIComponent(token)}`,
-      isDefault: Boolean(s.IsDefault),
+  const allSubtitles: PlayerSubtitleOption[] = (mediaSource.MediaStreams ?? [])
+    .filter((s) => s.Type === 'Subtitle')
+    .map((s) => {
+      const codec = (s.Codec ?? '').toLowerCase();
+      const canServeTextVtt =
+        !IMAGE_SUBTITLE_CODECS.has(codec) &&
+        (Boolean(s.SupportsExternalStream) ||
+          Boolean(s.IsExternal) ||
+          codec === 'subrip' ||
+          codec === 'srt' ||
+          codec === 'vtt');
+      return {
+        index: s.Index,
+        label: s.DisplayTitle || s.Title || s.Language || `Subtitle ${s.Index}`,
+        language: s.Language || 'en',
+        delivery: canServeTextVtt ? ('external' as const) : ('encode' as const),
+        src: canServeTextVtt
+          ? `${base}/Videos/${itemId}/${mediaSource.Id}/Subtitles/${s.Index}/0/Stream.vtt?api_key=${encodeURIComponent(token)}`
+          : undefined,
+        isDefault: Boolean(s.IsDefault),
+      };
+    });
+
+  const subtitleTracks = allSubtitles
+    .filter((s): s is PlayerSubtitleOption & { src: string } => s.delivery === 'external' && Boolean(s.src))
+    .map(({ index, label, language, src, isDefault }) => ({
+      index,
+      label,
+      language,
+      src,
+      isDefault,
     }));
+
+  const encodedSub =
+    subtitleStreamIndex !== undefined && subtitleStreamIndex !== -1
+      ? allSubtitles.find((s) => s.index === subtitleStreamIndex && s.delivery === 'encode')
+      : undefined;
 
   const maxBitrate = qualityToBitrate(quality);
   const canDirectPlay =
+    !encodedSub &&
     mediaSource.SupportsDirectPlay &&
     quality === 'auto' &&
     ['mp4', 'm4v', 'webm'].includes((mediaSource.Container ?? '').toLowerCase()) &&
@@ -176,6 +225,7 @@ export function buildPlaybackStream(
       streamUrl: `${base}/Videos/${itemId}/stream?Static=true&mediaSourceId=${encodeURIComponent(mediaSource.Id)}&api_key=${encodeURIComponent(token)}`,
       isHls: false,
       playMethod: 'DirectPlay',
+      allSubtitles,
       subtitleTracks,
     };
   }
@@ -193,16 +243,24 @@ export function buildPlaybackStream(
   });
   if (playSessionId) hlsParams.set('PlaySessionId', playSessionId);
   if (audioStreamIndex !== undefined) hlsParams.set('AudioStreamIndex', String(audioStreamIndex));
+  if (encodedSub) {
+    hlsParams.set('SubtitleStreamIndex', String(encodedSub.index));
+    hlsParams.set('SubtitleMethod', 'Encode');
+  }
 
-  const streamUrl = mediaSource.TranscodingUrl
-    ? `${base}${mediaSource.TranscodingUrl}`
-    : `${base}/Videos/${itemId}/master.m3u8?${hlsParams.toString()}`;
+  // Build explicit master.m3u8 URL when burning graphical subtitles so FFmpeg encodes them
+  const streamUrl =
+    !encodedSub && mediaSource.TranscodingUrl
+      ? `${base}${mediaSource.TranscodingUrl}`
+      : `${base}/Videos/${itemId}/master.m3u8?${hlsParams.toString()}`;
 
   return {
     streamUrl,
     fallbackUrl: `${base}/Videos/${itemId}/stream?Static=true&mediaSourceId=${encodeURIComponent(mediaSource.Id)}&api_key=${encodeURIComponent(token)}`,
     isHls: true,
     playMethod: 'Transcode',
+    encodedSubtitleIndex: encodedSub?.index,
+    allSubtitles,
     subtitleTracks,
   };
 }
