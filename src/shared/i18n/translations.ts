@@ -300,6 +300,10 @@ export interface TranslationDictionary {
     logoUrlLabel: string;
     logoUrlPlaceholder: string;
     logoUrlInvalidHint: string;
+    saveBrandBtn: string;
+    savingBrandBtn: string;
+    brandSavedServer: string;
+    brandSaveError: string;
   };
   player: {
     loadEpisodeError: string;
@@ -683,15 +687,19 @@ const en: TranslationDictionary = {
     interfaceLanguageTitle: 'Interface language',
     interfaceLanguageDesc: 'Choose the display language for menus, buttons, and player controls.',
     brandTitle: 'Brand customization',
-    brandDescPrefix: 'Customize the app name and logo in this browser (or globally using',
+    brandDescPrefix: 'Save the app name and logo on the Jellyfin server so every MorphPlay client shares them (with',
     brandDescAnd: 'and',
-    brandDescSuffix: 'in Docker).',
+    brandDescSuffix: 'as container defaults).',
     restoreDefault: 'Restore default',
     preview: 'Preview',
     appNameLabel: 'Application name',
     logoUrlLabel: 'Logo URL or path (SVG / PNG)',
     logoUrlPlaceholder: 'https://... or /brand/logo.svg',
     logoUrlInvalidHint: 'Use an http(s):// URL, a local /... path, or a data:image/ image.',
+    saveBrandBtn: 'Save to server',
+    savingBrandBtn: 'Saving…',
+    brandSavedServer: 'Branding saved on the server for all MorphPlay instances.',
+    brandSaveError: 'Could not save branding to the server. Verify administrator permissions.',
   },
   player: {
     loadEpisodeError: 'Could not load the series episode.',
@@ -1076,15 +1084,19 @@ const es: TranslationDictionary = {
     interfaceLanguageTitle: 'Idioma de la interfaz',
     interfaceLanguageDesc: 'Elige el idioma visible de los menús, botones y controles del reproductor.',
     brandTitle: 'Personalización de marca',
-    brandDescPrefix: 'Personaliza el nombre y el logotipo en este navegador (o de forma global con',
+    brandDescPrefix: 'Guarda el nombre y logotipo en el servidor Jellyfin para que todas las instancias de MorphPlay los compartan (con',
     brandDescAnd: 'y',
-    brandDescSuffix: 'en Docker).',
+    brandDescSuffix: 'como respaldo del contenedor).',
     restoreDefault: 'Restaurar predeterminado',
     preview: 'Vista previa',
     appNameLabel: 'Nombre de la aplicación',
     logoUrlLabel: 'URL o ruta del logotipo (SVG / PNG)',
     logoUrlPlaceholder: 'https://... o /brand/logo.svg',
     logoUrlInvalidHint: 'Usa una URL http(s)://, ruta local /... o imagen data:image/.',
+    saveBrandBtn: 'Guardar en el servidor',
+    savingBrandBtn: 'Guardando…',
+    brandSavedServer: 'Marca guardada en el servidor para todas las instancias de MorphPlay.',
+    brandSaveError: 'No se pudo guardar la marca en el servidor. Verifica permisos de administrador.',
   },
   player: {
     loadEpisodeError: 'No se pudo cargar el episodio de la serie.',

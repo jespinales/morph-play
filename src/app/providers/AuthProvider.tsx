@@ -12,6 +12,7 @@ import {
   safeSetStorageJson,
 } from '../../shared/utils/storage';
 import { normalizeServerUrl } from '../../shared/utils/url';
+import { usePreferences } from './PreferencesProvider';
 
 const STORAGE_SERVER_KEY = 'jellyfin_server_url';
 const STORAGE_TOKEN_KEY = 'jellyfin_access_token';
@@ -55,6 +56,7 @@ function loadSavedProfiles(): SavedProfile[] {
 }
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { setServerBrand } = usePreferences();
   const envServerUrl = getEnvConfiguredServerUrl();
   const [serverUrl, setServerUrl] = useState<string>(
     () => envServerUrl || safeGetStorageItem(STORAGE_SERVER_KEY) || ''
@@ -98,10 +100,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       try {
-        const info = await jellyfinApi.getPublicSystemInfo(targetUrl);
+        const [info, remoteBrand] = await Promise.all([
+          jellyfinApi.getPublicSystemInfo(targetUrl),
+          jellyfinApi.getServerBrand(targetUrl),
+        ]);
         if (!active) return;
         setServerUrl(targetUrl);
         setServerInfo(info);
+        setServerBrand(remoteBrand);
         safeSetStorageItem(STORAGE_SERVER_KEY, targetUrl);
 
         // Verify saved session token is still valid
@@ -139,28 +145,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => {
       active = false;
     };
-  }, [envServerUrl, upsertSavedProfile]);
+  }, [envServerUrl, upsertSavedProfile, setServerBrand]);
 
   const connectToServer = useCallback(async (rawUrl: string): Promise<PublicSystemInfo> => {
     const normalized = normalizeServerUrl(rawUrl);
     if (!normalized) {
       throw new Error('Please enter a valid Jellyfin server URL.');
     }
-    const info = await jellyfinApi.getPublicSystemInfo(normalized);
+    const [info, remoteBrand] = await Promise.all([
+      jellyfinApi.getPublicSystemInfo(normalized),
+      jellyfinApi.getServerBrand(normalized),
+    ]);
     setServerUrl(normalized);
     setServerInfo(info);
+    setServerBrand(remoteBrand);
     setUser(null);
     setAccessToken(null);
     safeSetStorageItem(STORAGE_SERVER_KEY, normalized);
     safeRemoveStorageItem(STORAGE_TOKEN_KEY);
     safeRemoveStorageItem(STORAGE_USER_KEY);
     return info;
-  }, []);
+  }, [setServerBrand]);
 
   const enableDemoMode = useCallback(async () => {
     const info = await jellyfinApi.getPublicSystemInfo(DEMO_SERVER_URL);
     setServerUrl(DEMO_SERVER_URL);
     setServerInfo(info);
+    setServerBrand(null);
     safeSetStorageItem(STORAGE_SERVER_KEY, DEMO_SERVER_URL);
 
     // Open profile selector in demo mode
@@ -316,8 +327,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       safeRemoveStorageItem(STORAGE_SERVER_KEY);
       setServerUrl('');
       setServerInfo(null);
+      setServerBrand(null);
     }
-  }, [serverUrl, accessToken, isEnvServerLocked]);
+  }, [serverUrl, accessToken, isEnvServerLocked, setServerBrand]);
 
   const savedProfiles = useMemo(
     () => allSavedProfiles.filter((entry) => entry.serverUrl === serverUrl),

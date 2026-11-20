@@ -27,10 +27,12 @@ const STORAGE_BRAND_KEY = 'morphplay_brand_override';
 interface PreferencesContextValue {
   preferences: UserPreferences;
   brand: BrandConfig;
+  serverBrand: Partial<BrandConfig> | null;
   brandOverride: Partial<BrandConfig>;
   locale: Locale;
   t: TranslationDictionary;
   updatePreferences: (patch: Partial<UserPreferences>) => void;
+  setServerBrand: (brand: Partial<BrandConfig> | null) => void;
   updateBrand: (patch: Partial<BrandConfig>) => void;
   resetBrand: () => void;
   setLocale: (next: Locale) => void;
@@ -52,6 +54,7 @@ function loadStoredPreferences(): UserPreferences {
 export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const envBrand = useMemo(() => getEnvConfiguredBrand(), []);
   const [preferences, setPreferences] = useState<UserPreferences>(() => loadStoredPreferences());
+  const [serverBrand, setServerBrand] = useState<Partial<BrandConfig> | null>(null);
   const [brandOverride, setBrandOverride] = useState<Partial<BrandConfig>>(() =>
     safeGetStorageJson<Partial<BrandConfig>>(STORAGE_BRAND_KEY, {})
   );
@@ -84,21 +87,29 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({ c
   }, []);
 
   const brand = useMemo<BrandConfig>(() => {
+    const serverName = serverBrand?.appName?.trim();
+    const serverLogo =
+      serverBrand?.logoUrl !== undefined ? serverBrand.logoUrl.trim() : undefined;
     const customName = brandOverride.appName?.trim();
     const customLogo =
       brandOverride.logoUrl !== undefined ? brandOverride.logoUrl.trim() : undefined;
+
     const resolvedLogo =
-      customLogo !== undefined
-        ? isSafeLogoUrl(customLogo)
-          ? customLogo
+      serverLogo !== undefined
+        ? isSafeLogoUrl(serverLogo)
+          ? serverLogo
           : ''
-        : envBrand.logoUrl;
+        : customLogo !== undefined
+          ? isSafeLogoUrl(customLogo)
+            ? customLogo
+            : ''
+          : envBrand.logoUrl;
 
     return {
-      appName: customName || envBrand.appName || DEFAULT_BRAND_CONFIG.appName,
+      appName: serverName || customName || envBrand.appName || DEFAULT_BRAND_CONFIG.appName,
       logoUrl: resolvedLogo,
     };
-  }, [brandOverride, envBrand]);
+  }, [serverBrand, brandOverride, envBrand]);
 
   // Synchronize document title and favicon with active branding
   useEffect(() => {
@@ -120,6 +131,20 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({ c
     () => ({
       preferences,
       brand,
+      serverBrand,
+      brandOverride,
+      locale,
+      t,
+      updatePreferences,
+      setServerBrand,
+      updateBrand,
+      resetBrand,
+      setLocale,
+    }),
+    [
+      preferences,
+      brand,
+      serverBrand,
       brandOverride,
       locale,
       t,
@@ -127,8 +152,7 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({ c
       updateBrand,
       resetBrand,
       setLocale,
-    }),
-    [preferences, brand, brandOverride, locale, t, updatePreferences, updateBrand, resetBrand, setLocale]
+    ]
   );
 
   return <PreferencesContext.Provider value={value}>{children}</PreferencesContext.Provider>;

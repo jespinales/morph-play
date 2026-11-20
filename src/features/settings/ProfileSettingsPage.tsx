@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Activity,
   Globe,
@@ -36,11 +36,13 @@ export const ProfileSettingsPage: React.FC = () => {
   const {
     preferences,
     brand,
+    serverBrand,
     brandOverride,
     locale,
     setLocale,
     t,
     updatePreferences,
+    setServerBrand,
     updateBrand,
     resetBrand,
   } = usePreferences();
@@ -55,6 +57,19 @@ export const ProfileSettingsPage: React.FC = () => {
   const [bitrateTesting, setBitrateTesting] = useState(false);
   const [bitrateSummary, setBitrateSummary] = useState<string | null>(null);
   const [bitrateError, setBitrateError] = useState(false);
+  const [draftAppName, setDraftAppName] = useState(
+    () => serverBrand?.appName ?? brandOverride.appName ?? ''
+  );
+  const [draftLogoUrl, setDraftLogoUrl] = useState(
+    () => serverBrand?.logoUrl ?? brandOverride.logoUrl ?? ''
+  );
+  const [brandBusy, setBrandBusy] = useState(false);
+  const [brandStatus, setBrandStatus] = useState<'idle' | 'saved' | 'error'>('idle');
+
+  useEffect(() => {
+    setDraftAppName(serverBrand?.appName ?? brandOverride.appName ?? '');
+    setDraftLogoUrl(serverBrand?.logoUrl ?? brandOverride.logoUrl ?? '');
+  }, [serverBrand?.appName, serverBrand?.logoUrl, brandOverride.appName, brandOverride.logoUrl]);
 
   const handlePreferenceChange = (patch: Partial<UserPreferences>) => {
     updatePreferences(patch);
@@ -141,6 +156,67 @@ export const ProfileSettingsPage: React.FC = () => {
 
   const avatar = user && serverUrl ? getUserAvatarUrl(serverUrl, user) : null;
   const isAdmin = Boolean(user?.Policy?.IsAdministrator);
+  const hasInvalidDraftLogo = Boolean(draftLogoUrl.trim()) && !isSafeLogoUrl(draftLogoUrl.trim());
+  const previewAppName = draftAppName.trim() || brand.appName;
+  const previewLogoUrl =
+    draftLogoUrl.trim() === ''
+      ? serverBrand?.logoUrl !== undefined || brandOverride.logoUrl !== undefined
+        ? ''
+        : brand.logoUrl
+      : isSafeLogoUrl(draftLogoUrl.trim())
+        ? draftLogoUrl.trim()
+        : brand.logoUrl;
+
+  const handleSaveBrand = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (hasInvalidDraftLogo) return;
+    const trimmedName = draftAppName.trim();
+    const trimmedLogo = draftLogoUrl.trim();
+    const nextBrand =
+      trimmedName || trimmedLogo
+        ? {
+            ...(trimmedName ? { appName: trimmedName } : {}),
+            ...(trimmedLogo ? { logoUrl: trimmedLogo } : {}),
+          }
+        : null;
+
+    setBrandBusy(true);
+    setBrandStatus('idle');
+    try {
+      if (!isDemo && serverUrl && accessToken) {
+        const saved = await jellyfinApi.updateServerBrand(serverUrl, accessToken, nextBrand);
+        setServerBrand(saved);
+        resetBrand();
+      } else if (nextBrand) {
+        updateBrand(nextBrand);
+      } else {
+        resetBrand();
+      }
+      setBrandStatus('saved');
+    } catch {
+      setBrandStatus('error');
+    } finally {
+      setBrandBusy(false);
+    }
+  };
+
+  const handleResetBrand = async () => {
+    setBrandBusy(true);
+    setBrandStatus('idle');
+    try {
+      if (!isDemo && serverUrl && accessToken) {
+        await jellyfinApi.updateServerBrand(serverUrl, accessToken, null);
+        setServerBrand(null);
+      }
+      resetBrand();
+      setDraftAppName('');
+      setDraftLogoUrl('');
+    } catch {
+      setBrandStatus('error');
+    } finally {
+      setBrandBusy(false);
+    }
+  };
 
   return (
     <main className="min-h-screen pt-24 pb-24 md:pb-16 max-w-4xl mx-auto px-4 sm:px-6 space-y-8 animate-fadeIn">
@@ -453,11 +529,14 @@ export const ProfileSettingsPage: React.FC = () => {
               </div>
             </div>
 
-            {(brandOverride.appName !== undefined || brandOverride.logoUrl !== undefined) && (
+            {(serverBrand !== null ||
+              brandOverride.appName !== undefined ||
+              brandOverride.logoUrl !== undefined) && (
               <button
                 type="button"
-                onClick={resetBrand}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-semibold text-white transition-colors"
+                disabled={brandBusy}
+                onClick={() => void handleResetBrand()}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-semibold text-white transition-colors disabled:opacity-50"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 {t.settings.restoreDefault}
@@ -469,47 +548,73 @@ export const ProfileSettingsPage: React.FC = () => {
           <div className="rounded-xl bg-[#0a0a0e] border border-white/10 px-4 py-3 flex items-center justify-between gap-4">
             <span className="text-xs font-medium text-zinc-400">{t.settings.preview}</span>
             <BrandLogo
-              appName={brand.appName}
-              logoUrl={brand.logoUrl}
+              appName={previewAppName}
+              logoUrl={previewLogoUrl}
               iconSize={30}
               textClassName="text-lg font-extrabold tracking-tight text-white"
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label htmlFor="brand-app-name" className="text-sm font-semibold text-zinc-200">
-                {t.settings.appNameLabel}
-              </label>
-              <input
-                id="brand-app-name"
-                name="appName"
-                type="text"
-                value={brandOverride.appName ?? ''}
-                onChange={(e) => updateBrand({ appName: e.target.value })}
-                placeholder={brand.appName}
-                className="w-full bg-[#0a0a0e] border border-white/15 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#00A4DC]"
-              />
+          <form onSubmit={handleSaveBrand} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label htmlFor="brand-app-name" className="text-sm font-semibold text-zinc-200">
+                  {t.settings.appNameLabel}
+                </label>
+                <input
+                  id="brand-app-name"
+                  name="appName"
+                  type="text"
+                  value={draftAppName}
+                  onChange={(e) => {
+                    setDraftAppName(e.target.value);
+                    if (brandStatus !== 'idle') setBrandStatus('idle');
+                  }}
+                  placeholder={brand.appName}
+                  className="w-full bg-[#0a0a0e] border border-white/15 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#00A4DC]"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label htmlFor="brand-logo-url" className="text-sm font-semibold text-zinc-200">
+                  {t.settings.logoUrlLabel}
+                </label>
+                <input
+                  id="brand-logo-url"
+                  name="logoUrl"
+                  type="text"
+                  value={draftLogoUrl}
+                  onChange={(e) => {
+                    setDraftLogoUrl(e.target.value);
+                    if (brandStatus !== 'idle') setBrandStatus('idle');
+                  }}
+                  placeholder={t.settings.logoUrlPlaceholder}
+                  className="w-full bg-[#0a0a0e] border border-white/15 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#00A4DC]"
+                />
+                {hasInvalidDraftLogo && (
+                  <p className="text-xs text-amber-400">{t.settings.logoUrlInvalidHint}</p>
+                )}
+              </div>
             </div>
 
-            <div className="space-y-1.5">
-              <label htmlFor="brand-logo-url" className="text-sm font-semibold text-zinc-200">
-                {t.settings.logoUrlLabel}
-              </label>
-              <input
-                id="brand-logo-url"
-                name="logoUrl"
-                type="text"
-                value={brandOverride.logoUrl ?? ''}
-                onChange={(e) => updateBrand({ logoUrl: e.target.value })}
-                placeholder={t.settings.logoUrlPlaceholder}
-                className="w-full bg-[#0a0a0e] border border-white/15 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#00A4DC]"
-              />
-              {brandOverride.logoUrl && !isSafeLogoUrl(brandOverride.logoUrl) && (
-                <p className="text-xs text-amber-400">{t.settings.logoUrlInvalidHint}</p>
-              )}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                {brandStatus === 'saved' && (
+                  <p className="text-xs text-emerald-400 font-medium">{t.settings.brandSavedServer}</p>
+                )}
+                {brandStatus === 'error' && (
+                  <p className="text-xs text-rose-400 font-medium">{t.settings.brandSaveError}</p>
+                )}
+              </div>
+              <button
+                type="submit"
+                disabled={brandBusy || hasInvalidDraftLogo}
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#AA5CC3] to-[#00A4DC] text-white font-semibold text-sm hover:opacity-95 disabled:opacity-50 transition-opacity"
+              >
+                {brandBusy ? t.settings.savingBrandBtn : t.settings.saveBrandBtn}
+              </button>
             </div>
-          </div>
+          </form>
         </section>
       )}
     </main>

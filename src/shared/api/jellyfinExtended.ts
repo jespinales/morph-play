@@ -1,6 +1,7 @@
 import {
   AllThemeMediaResult,
   BaseItemDto,
+  BrandConfig,
   BrandingOptionsDto,
   DisplayPreferencesDto,
   ExternalIdInfo,
@@ -18,6 +19,7 @@ import {
   UploadSubtitleDto,
   UserItemDataDto,
 } from '../types/jellyfin';
+import { parseServerBrandFromCss, upsertServerBrandInCss } from '../utils/brand';
 import { normalizeServerUrl } from '../utils/url';
 import { apiRequest, buildAuthHeader } from './client';
 import { DEMO_ITEMS } from './demo/demoData';
@@ -810,6 +812,43 @@ export const jellyfinExtendedApi = {
     } catch {
       return null;
     }
+  },
+
+  async updateBrandingConfiguration(
+    serverUrl: string,
+    token: string,
+    branding: BrandingOptionsDto
+  ): Promise<void> {
+    if (isDemoServer(serverUrl)) return;
+    await apiRequest(serverUrl, '/System/Configuration/Branding', {
+      method: 'POST',
+      token,
+      body: branding,
+    });
+  },
+
+  async getServerBrand(serverUrl: string): Promise<Partial<BrandConfig> | null> {
+    const branding = await this.getBrandingConfiguration(serverUrl);
+    return parseServerBrandFromCss(branding?.CustomCss);
+  },
+
+  async updateServerBrand(
+    serverUrl: string,
+    token: string,
+    brand: Partial<BrandConfig> | null
+  ): Promise<Partial<BrandConfig> | null> {
+    if (isDemoServer(serverUrl)) return brand;
+    const current = await apiRequest<BrandingOptionsDto>(serverUrl, '/Branding/Configuration', {
+      token,
+      timeoutMs: 5000,
+    });
+    const nextCss = upsertServerBrandInCss(current?.CustomCss, brand);
+    await this.updateBrandingConfiguration(serverUrl, token, {
+      LoginDisclaimer: current?.LoginDisclaimer ?? '',
+      CustomCss: nextCss,
+      SplashscreenEnabled: current?.SplashscreenEnabled ?? true,
+    });
+    return parseServerBrandFromCss(nextCss);
   },
 
   async measureBitrateMbps(

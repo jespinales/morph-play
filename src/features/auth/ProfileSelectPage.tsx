@@ -18,6 +18,7 @@ import { jellyfinApi } from '../../shared/api/jellyfin';
 import { getUserAvatarUrl } from '../../shared/api/playback';
 import { BrandLogo } from '../../shared/components/BrandLogo';
 import { LanguageSwitcher } from '../../shared/components/LanguageSwitcher';
+import { parseServerBrandFromCss } from '../../shared/utils/brand';
 import { UserDto } from '../../shared/types/jellyfin';
 
 export const ProfileSelectPage: React.FC = () => {
@@ -33,7 +34,7 @@ export const ProfileSelectPage: React.FC = () => {
     removeSavedProfile,
     disconnectServer,
   } = useAuth();
-  const { brand, locale, setLocale, t } = usePreferences();
+  const { brand, setServerBrand, locale, setLocale, t } = usePreferences();
 
   const [publicUsers, setPublicUsers] = useState<UserDto[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
@@ -65,6 +66,7 @@ export const ProfileSelectPage: React.FC = () => {
       setPublicUsers(users);
       setQcEnabled(quickConnectOk);
       setLoginDisclaimer(branding?.LoginDisclaimer?.trim() || null);
+      setServerBrand(parseServerBrandFromCss(branding?.CustomCss));
       // Only open manual sign-in automatically when no local profiles are remembered
       if (users.length === 0 && savedProfiles.length === 0 && !quickConnectOk) {
         setManualModalOpen(true);

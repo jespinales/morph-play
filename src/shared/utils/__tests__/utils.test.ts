@@ -9,6 +9,7 @@ import {
 } from '../time';
 import { parseCueLines } from '../subtitles';
 import { getTrickplayFrame, selectTrickplayInfo } from '../trickplay';
+import { parseServerBrandFromCss, upsertServerBrandInCss } from '../brand';
 
 describe('url utils', () => {
   it('normalizes server URLs and preserves demo protocol', () => {
@@ -77,5 +78,31 @@ describe('trickplay utils', () => {
     expect(frame?.url).toContain('/Videos/item-1/Trickplay/320/1.jpg');
     expect(frame?.col).toBe(1);
     expect(frame?.row).toBe(0);
+  });
+});
+
+describe('brand CSS metadata utils', () => {
+  it('stores, updates, parses, and removes MorphPlay brand metadata while preserving admin CSS', () => {
+    const initialCss = '.header { color: red; }';
+    const withBrand = upsertServerBrandInCss(initialCss, {
+      appName: 'WasiPlay',
+      logoUrl: 'https://cdn.example.com/logo.svg',
+    });
+
+    expect(withBrand).toContain('.header { color: red; }');
+    expect(parseServerBrandFromCss(withBrand)).toEqual({
+      appName: 'WasiPlay',
+      logoUrl: 'https://cdn.example.com/logo.svg',
+    });
+
+    const updated = upsertServerBrandInCss(withBrand, {
+      appName: 'CineHome',
+      logoUrl: 'javascript:alert(1)',
+    });
+    expect(parseServerBrandFromCss(updated)).toEqual({ appName: 'CineHome' });
+
+    const cleared = upsertServerBrandInCss(updated, null);
+    expect(cleared).toBe('.header { color: red; }');
+    expect(parseServerBrandFromCss(cleared)).toBeNull();
   });
 });
