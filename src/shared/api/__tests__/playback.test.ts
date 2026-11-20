@@ -7,6 +7,7 @@ import {
   getUserAvatarUrl,
   qualityToBitrate,
   qualityToMaxHeight,
+  qualityToMaxWidth,
 } from '../playback';
 import { MediaSourceInfo } from '../../types/jellyfin';
 
@@ -114,7 +115,7 @@ describe('playback stream builder', () => {
       DefaultAudioStreamIndex: 1,
       Bitrate: 15_000_000,
       MediaStreams: [
-        { Type: 'Video', Index: 0, Codec: 'h264', Height: 1080 },
+        { Type: 'Video', Index: 0, Codec: 'h264', Width: 1920, Height: 1080 },
         { Type: 'Audio', Index: 1, Codec: 'aac', Language: 'eng' },
       ],
     };
@@ -122,11 +123,34 @@ describe('playback stream builder', () => {
     expect(qualityToBitrate('360p')).toBe(1_500_000);
     expect(qualityToMaxHeight('720p')).toBe(720);
     expect(qualityToMaxHeight('auto')).toBeUndefined();
+    expect(qualityToMaxWidth('720p')).toBe(1280);
+    expect(qualityToMaxWidth('360p')).toBe(640);
+    expect(qualityToMaxWidth('auto')).toBeUndefined();
 
     const stream = buildPlaybackStream('https://jf.test', 'tok', 'item-3', hdSource, 'sess-4', 1, '720p');
     expect(stream.playMethod).toBe('Transcode');
     expect(stream.isHls).toBe(true);
     expect(stream.streamUrl).toContain('VideoBitrate=8000000');
+    expect(stream.streamUrl).toContain('MaxWidth=1280');
     expect(stream.streamUrl).toContain('MaxHeight=720');
+  });
+
+  it('appends missing MaxWidth/MaxHeight caps to server TranscodingUrl for manual qualities', () => {
+    const scopeSource: MediaSourceInfo = {
+      Id: 'src-scope',
+      Container: 'mkv',
+      SupportsDirectPlay: false,
+      DefaultAudioStreamIndex: 1,
+      Bitrate: 20_000_000,
+      TranscodingUrl: '/videos/item-4/master.m3u8?VideoBitrate=2616000&MaxHeight=480',
+      MediaStreams: [
+        { Type: 'Video', Index: 0, Codec: 'h264', Width: 1920, Height: 804 },
+        { Type: 'Audio', Index: 1, Codec: 'aac', Language: 'eng' },
+      ],
+    };
+
+    const stream = buildPlaybackStream('https://jf.test', 'tok', 'item-4', scopeSource, 'sess-5', 1, '480p');
+    expect(stream.streamUrl).toContain('MaxWidth=854');
+    expect(stream.streamUrl).toContain('MaxHeight=480');
   });
 });

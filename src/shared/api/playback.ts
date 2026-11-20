@@ -172,6 +172,28 @@ export function qualityToMaxHeight(quality: StreamingQuality): number | undefine
   }
 }
 
+export function qualityToMaxWidth(quality: StreamingQuality): number | undefined {
+  switch (quality) {
+    case '1080p':
+      return 1920;
+    case '720p':
+      return 1280;
+    case '480p':
+      return 854;
+    case '360p':
+      return 640;
+    case 'auto':
+    default:
+      return undefined;
+  }
+}
+
+function appendQueryParamIfMissing(url: string, key: string, value: string): string {
+  const pattern = new RegExp(`[?&]${key}=`, 'i');
+  if (pattern.test(url)) return url;
+  return `${url}${url.includes('?') ? '&' : '?'}${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
+}
+
 export interface PlayerSubtitleOption {
   index: number;
   label: string;
@@ -320,14 +342,16 @@ export function buildPlaybackStream(
       : undefined;
 
   const maxBitrate = qualityToBitrate(quality);
+  const maxWidth = qualityToMaxWidth(quality);
   const maxHeight = qualityToMaxHeight(quality);
   const videoStream = (mediaSource.MediaStreams ?? []).find((s) => s.Type === 'Video');
+  const withinMaxWidth = !maxWidth || !videoStream?.Width || videoStream.Width <= maxWidth;
   const withinMaxHeight = !maxHeight || !videoStream?.Height || videoStream.Height <= maxHeight;
   const withinMaxBitrate = Boolean(mediaSource.Bitrate) && mediaSource.Bitrate! <= maxBitrate;
   const canDirectPlay =
     !encodedSub &&
     mediaSource.SupportsDirectPlay &&
-    (quality === 'auto' || (withinMaxHeight && withinMaxBitrate)) &&
+    (quality === 'auto' || (withinMaxWidth && withinMaxHeight && withinMaxBitrate)) &&
     ['mp4', 'm4v', 'webm'].includes((mediaSource.Container ?? '').toLowerCase()) &&
     (audioStreamIndex === undefined || audioStreamIndex === mediaSource.DefaultAudioStreamIndex);
 
@@ -341,11 +365,28 @@ export function buildPlaybackStream(
     };
   }
 
-  const normalizedTranscodingUrl = mediaSource.TranscodingUrl
+  const rawTranscodingUrl = mediaSource.TranscodingUrl
     ? mediaSource.TranscodingUrl.startsWith('/')
       ? `${base}${mediaSource.TranscodingUrl}`
       : `${base}/${mediaSource.TranscodingUrl}`
     : undefined;
+  let normalizedTranscodingUrl = rawTranscodingUrl;
+  if (normalizedTranscodingUrl) {
+    if (maxWidth) {
+      normalizedTranscodingUrl = appendQueryParamIfMissing(
+        normalizedTranscodingUrl,
+        'MaxWidth',
+        String(maxWidth)
+      );
+    }
+    if (maxHeight) {
+      normalizedTranscodingUrl = appendQueryParamIfMissing(
+        normalizedTranscodingUrl,
+        'MaxHeight',
+        String(maxHeight)
+      );
+    }
+  }
 
   const transcodingMatchesEncodedSub =
     encodedSub !== undefined &&
@@ -365,6 +406,7 @@ export function buildPlaybackStream(
   });
   if (playSessionId) hlsParams.set('PlaySessionId', playSessionId);
   if (audioStreamIndex !== undefined) hlsParams.set('AudioStreamIndex', String(audioStreamIndex));
+  if (maxWidth) hlsParams.set('MaxWidth', String(maxWidth));
   if (maxHeight) hlsParams.set('MaxHeight', String(maxHeight));
   if (encodedSub) {
     hlsParams.set('SubtitleStreamIndex', String(encodedSub.index));

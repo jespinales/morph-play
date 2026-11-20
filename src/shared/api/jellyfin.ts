@@ -689,6 +689,7 @@ export const jellyfinApi = {
     itemId: string,
     options: {
       maxStreamingBitrate?: number;
+      maxWidth?: number;
       maxHeight?: number;
       audioStreamIndex?: number;
       subtitleStreamIndex?: number;
@@ -700,6 +701,29 @@ export const jellyfinApi = {
     if (isDemoServer(serverUrl)) {
       return buildDemoPlaybackInfo(itemId);
     }
+
+    const resolutionConditions = [
+      ...(options.maxWidth
+        ? [
+            {
+              Condition: 'LessThanEqual',
+              Property: 'Width',
+              Value: String(options.maxWidth),
+              IsRequired: true,
+            },
+          ]
+        : []),
+      ...(options.maxHeight
+        ? [
+            {
+              Condition: 'LessThanEqual',
+              Property: 'Height',
+              Value: String(options.maxHeight),
+              IsRequired: true,
+            },
+          ]
+        : []),
+    ];
 
     const body = {
       UserId: userId,
@@ -737,21 +761,15 @@ export const jellyfinApi = {
             Context: 'Streaming',
             MaxAudioChannels: '2',
             MinSegments: 1,
+            ...(resolutionConditions.length > 0 ? { Conditions: resolutionConditions } : {}),
           },
         ],
-        ...(options.maxHeight
+        ...(resolutionConditions.length > 0
           ? {
               CodecProfiles: [
                 {
                   Type: 'Video',
-                  Conditions: [
-                    {
-                      Condition: 'LessThanEqual',
-                      Property: 'Height',
-                      Value: String(options.maxHeight),
-                      IsRequired: true,
-                    },
-                  ],
+                  Conditions: resolutionConditions,
                 },
               ],
             }

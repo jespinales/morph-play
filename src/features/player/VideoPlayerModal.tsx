@@ -10,6 +10,7 @@ import {
   BuiltPlaybackStream,
   qualityToBitrate,
   qualityToMaxHeight,
+  qualityToMaxWidth,
 } from '../../shared/api/playback';
 import {
   BaseItemDto,
@@ -77,6 +78,8 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   const lastReportedTicksRef = useRef<number>(0);
   const seekBarRef = useRef<HTMLDivElement>(null);
   const isClosingRef = useRef<boolean>(false);
+  const resumeAppliedRef = useRef<boolean>(true);
+  const negotiationSeqRef = useRef<number>(0);
   const pendingSeekTargetRef = useRef<number | null>(null);
   const seekFeedbackTimerRef = useRef<number | null>(null);
   const seekPreviewTimerRef = useRef<number | null>(null);
@@ -303,6 +306,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         const [playbackInfo, itemSegments, itemDetail, related] = await Promise.all([
           jellyfinApi.getPlaybackInfo(serverUrl, accessToken!, user!.Id, activeItem.Id, {
             maxStreamingBitrate: qualityToBitrate(activeQuality),
+            maxWidth: qualityToMaxWidth(activeQuality),
             maxHeight: qualityToMaxHeight(activeQuality),
             startTimeTicks: effectiveStartTicks,
           }),
@@ -361,6 +365,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           const renegotiated = await jellyfinApi
             .getPlaybackInfo(serverUrl, accessToken!, user!.Id, activeItem.Id, {
               maxStreamingBitrate: qualityToBitrate(activeQuality),
+              maxWidth: qualityToMaxWidth(activeQuality),
               maxHeight: qualityToMaxHeight(activeQuality),
               startTimeTicks: effectiveStartTicks,
               mediaSourceId: activeSource.Id,
@@ -458,6 +463,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     const startSeconds = builtStream.startSeconds ?? 0;
     const knownDuration = builtStream.durationSeconds ?? 0;
     let appliedResume = startSeconds <= 0;
+    resumeAppliedRef.current = appliedResume;
     let detachMetadataListener: (() => void) | null = null;
 
     const applyResumePosition = () => {
@@ -466,6 +472,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         Number.isFinite(video.duration) && video.duration > 0 ? video.duration : knownDuration;
       if (effectiveDuration > 0 && startSeconds >= effectiveDuration - 5) {
         appliedResume = true;
+        resumeAppliedRef.current = true;
         return;
       }
       // Wait for HAVE_METADATA so setting currentTime persists across MSE/native initialization
@@ -476,6 +483,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         setCurrentTime(startSeconds);
       }
       appliedResume = true;
+      resumeAppliedRef.current = true;
     };
 
     const tryAutoPlay = () => {
@@ -558,13 +566,29 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     };
   }, [builtStream, activeItem.Id]);
 
+  const getPreservedPlaybackSeconds = useCallback(() => {
+    const vid = videoRef.current;
+    const fallbackStartSeconds = builtStream?.startSeconds ?? 0;
+    if (!vid) {
+      return fallbackStartSeconds > 0 ? fallbackStartSeconds : currentTime;
+    }
+    if (
+      fallbackStartSeconds > 0 &&
+      vid.currentTime === 0 &&
+      (!resumeAppliedRef.current || vid.readyState < 1)
+    ) {
+      return fallbackStartSeconds;
+    }
+    return vid.currentTime;
+  }, [builtStream?.startSeconds, currentTime]);
+
   const syncPlaybackProgress = useCallback(
     async (paused: boolean, refreshHomeAfter: boolean) => {
       const video = videoRef.current;
       if (!video || !serverUrl || !accessToken || !mediaSource || !builtStream || isClosingRef.current) {
         return;
       }
-      const ticks = secondsToTicks(video.currentTime);
+      const ticks = secondsToTicks(getPreservedPlaybackSeconds());
       lastReportedTicksRef.current = ticks;
       await jellyfinApi.reportPlaybackProgress(serverUrl, accessToken, {
         ItemId: activeItem.Id,
@@ -591,6 +615,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
       playSessionId,
       selectedAudioIndex,
       selectedSubtitleIndex,
+      getPreservedPlaybackSeconds,
       onSyncProgress,
     ]
   );
@@ -978,6 +1003,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     qualityOverride?: StreamingQuality
   ) => {
     if (!serverUrl || !accessToken || !user?.Id) return;
+    const seq = ++negotiationSeqRef.current;
     const targetQuality = qualityOverride ?? selectedQuality;
     let resolvedSource = targetSource;
     let resolvedSessionId = playSessionId;
@@ -997,6 +1023,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
       const renegotiated = await jellyfinApi
         .getPlaybackInfo(serverUrl, accessToken, user.Id, activeItem.Id, {
           maxStreamingBitrate: qualityToBitrate(targetQuality),
+          maxWidth: qualityToMaxWidth(targetQuality),
           maxHeight: qualityToMaxHeight(targetQuality),
           startTimeTicks: secondsToTicks(savedTime),
           mediaSourceId: targetSource.Id,
@@ -1005,6 +1032,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           alwaysBurnInSubtitleWhenTranscoding: needsBurnIn,
         })
         .catch(() => null);
+      if (seq !== negotiationSeqRef.current) return;
       const matched =
         renegotiated?.MediaSources?.find((s) => s.Id === targetSource.Id) ??
         renegotiated?.MediaSources?.[0];
@@ -1016,6 +1044,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
       }
     }
 
+    if (seq !== negotiationSeqRef.current) return;
     setBuiltStream({
       ...buildPlaybackStream(
         serverUrl,
@@ -1037,7 +1066,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     setOpenMenu(null);
     if (nextQuality === selectedQuality) return;
 
-    const savedTime = videoRef.current?.currentTime ?? currentTime;
+    const savedTime = getPreservedPlaybackSeconds();
     const subNeedsBurnIn = builtStream?.encodedSubtitleIndex !== undefined;
     setSelectedQuality(nextQuality);
     updatePreferences({ quality: nextQuality });
@@ -1055,7 +1084,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
 
   const handleSwitchAudio = async (audioIdx: number) => {
     if (!serverUrl || !accessToken || !mediaSource) return;
-    const savedTime = videoRef.current?.currentTime ?? 0;
+    const savedTime = getPreservedPlaybackSeconds();
     const subNeedsBurnIn = builtStream?.encodedSubtitleIndex !== undefined;
     setSelectedAudioIndex(audioIdx);
     setOpenMenu(null);
@@ -1074,7 +1103,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
       setOpenMenu(null);
       return;
     }
-    const savedTime = videoRef.current?.currentTime ?? 0;
+    const savedTime = getPreservedPlaybackSeconds();
     const audios = (nextSource.MediaStreams ?? []).filter((s) => s.Type === 'Audio');
     const nextAudio =
       audios.find((a) => a.Language?.toLowerCase() === preferences.preferredAudioLang) ??
@@ -1127,7 +1156,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     setOpenMenu(null);
 
     if ((prevWasEncoded || nextNeedsEncode) && serverUrl && accessToken && mediaSource) {
-      const savedTime = videoRef.current?.currentTime ?? 0;
+      const savedTime = getPreservedPlaybackSeconds();
       await applyNegotiatedStream(
         mediaSource,
         selectedAudioIndex,
@@ -1188,10 +1217,11 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
 
   const refreshMediaStreams = async () => {
     if (!serverUrl || !accessToken || !user?.Id || !mediaSource) return;
-    const savedTime = videoRef.current?.currentTime ?? currentTime;
+    const savedTime = getPreservedPlaybackSeconds();
     const info = await jellyfinApi
       .getPlaybackInfo(serverUrl, accessToken, user.Id, activeItem.Id, {
         maxStreamingBitrate: qualityToBitrate(selectedQuality),
+        maxWidth: qualityToMaxWidth(selectedQuality),
         maxHeight: qualityToMaxHeight(selectedQuality),
         startTimeTicks: secondsToTicks(savedTime),
         mediaSourceId: mediaSource.Id,
@@ -1620,6 +1650,13 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         }}
         onTimeUpdate={(e) => {
           const vid = e.currentTarget;
+          if (
+            (builtStream?.startSeconds ?? 0) > 0 &&
+            vid.currentTime === 0 &&
+            (!resumeAppliedRef.current || vid.readyState < 1)
+          ) {
+            return;
+          }
           setCurrentTime(vid.currentTime);
           if (!vid.paused && vid.currentTime !== lastTimeUpdateRef.current) {
             lastTimeUpdateRef.current = vid.currentTime;
