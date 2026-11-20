@@ -9,6 +9,7 @@ import {
   buildPlaybackStream,
   BuiltPlaybackStream,
   qualityToBitrate,
+  qualityToMaxHeight,
 } from '../../shared/api/playback';
 import {
   BaseItemDto,
@@ -21,6 +22,7 @@ import {
   PlaystateCommandData,
   RemoteSubtitleInfo,
   SessionInfoDto,
+  StreamingQuality,
   SyncPlayCommandData,
   SyncPlayGroupDto,
 } from '../../shared/types/jellyfin';
@@ -61,7 +63,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   onRegisterRemoteHandlers,
 }) => {
   const { serverUrl, accessToken, user } = useAuth();
-  const { preferences, t } = usePreferences();
+  const { preferences, updatePreferences, t } = usePreferences();
   const tRef = useRef(t);
   tRef.current = t;
 
@@ -77,6 +79,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   const isClosingRef = useRef<boolean>(false);
   const pendingSeekTargetRef = useRef<number | null>(null);
   const seekFeedbackTimerRef = useRef<number | null>(null);
+  const seekPreviewTimerRef = useRef<number | null>(null);
   const seekSyncTimerRef = useRef<number | null>(null);
   const ignoreNextSeekSyncRef = useRef<boolean>(false);
   const suppressSyncBroadcastRef = useRef<boolean>(false);
@@ -97,6 +100,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   const [chapters, setChapters] = useState<ChapterInfo[]>([]);
   const [playSessionId, setPlaySessionId] = useState<string | undefined>(undefined);
   const [builtStream, setBuiltStream] = useState<BuiltPlaybackStream | null>(null);
+  const [activePlayMethodOverride, setActivePlayMethodOverride] = useState<'DirectPlay' | null>(null);
   const [segments, setSegments] = useState<MediaSegmentDto[]>([]);
   const [audioStreams, setAudioStreams] = useState<MediaStream[]>([]);
   const [selectedAudioIndex, setSelectedAudioIndex] = useState<number | undefined>(undefined);
@@ -118,6 +122,8 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   const [remoteSubSearching, setRemoteSubSearching] = useState<boolean>(false);
 
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const isPlayingRef = useRef<boolean>(false);
+  isPlayingRef.current = isPlaying;
   const [isBuffering, setIsBuffering] = useState<boolean>(true);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
@@ -125,6 +131,9 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   const [volume, setVolume] = useState<number>(1);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [playbackRate, setPlaybackRate] = useState<number>(1);
+  const [selectedQuality, setSelectedQuality] = useState<StreamingQuality>(preferences.quality);
+  const selectedQualityRef = useRef<StreamingQuality>(selectedQuality);
+  selectedQualityRef.current = selectedQuality;
   const [isPiP, setIsPiP] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const supportsPiP =
@@ -133,6 +142,8 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     Boolean(document.pictureInPictureEnabled);
   const [showControls, setShowControls] = useState<boolean>(true);
   const [openMenu, setOpenMenu] = useState<PlayerMenuKind>(null);
+  const openMenuRef = useRef<PlayerMenuKind>(openMenu);
+  openMenuRef.current = openMenu;
   const [autoSkippedId, setAutoSkippedId] = useState<string | null>(null);
   const [trickplay, setTrickplay] = useState<TrickplaySelection | null>(null);
   const [seekPreview, setSeekPreview] = useState<{ time: number; percent: number } | null>(null);
@@ -206,11 +217,23 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
       window.clearTimeout(hideControlsTimer.current);
     }
     hideControlsTimer.current = window.setTimeout(() => {
-      if (!openMenu) {
+      if (!openMenuRef.current && isPlayingRef.current) {
         setShowControls(false);
       }
     }, 3200);
-  }, [openMenu]);
+  }, []);
+
+  useEffect(() => {
+    if (openMenu || !isPlaying) {
+      setShowControls(true);
+      if (hideControlsTimer.current) {
+        window.clearTimeout(hideControlsTimer.current);
+        hideControlsTimer.current = null;
+      }
+    } else {
+      bumpControls();
+    }
+  }, [openMenu, isPlaying, bumpControls]);
 
   // Load PlaybackInfo + MediaSegments whenever activeItem or resumeDecision changes
   useEffect(() => {
@@ -275,10 +298,12 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           }
         }
 
+        const activeQuality = selectedQualityRef.current;
         const similarTargetId = activeItem.SeriesId || activeItem.Id;
         const [playbackInfo, itemSegments, itemDetail, related] = await Promise.all([
           jellyfinApi.getPlaybackInfo(serverUrl, accessToken!, user!.Id, activeItem.Id, {
-            maxStreamingBitrate: qualityToBitrate(preferences.quality),
+            maxStreamingBitrate: qualityToBitrate(activeQuality),
+            maxHeight: qualityToMaxHeight(activeQuality),
             startTimeTicks: effectiveStartTicks,
           }),
           jellyfinApi.getMediaSegments(serverUrl, accessToken!, activeItem.Id),
@@ -324,7 +349,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           activeSource,
           activePlaySessionId,
           preferredAudio?.Index,
-          preferences.quality,
+          activeQuality,
           preferredSub?.Index
         );
 
@@ -335,7 +360,8 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         ) {
           const renegotiated = await jellyfinApi
             .getPlaybackInfo(serverUrl, accessToken!, user!.Id, activeItem.Id, {
-              maxStreamingBitrate: qualityToBitrate(preferences.quality),
+              maxStreamingBitrate: qualityToBitrate(activeQuality),
+              maxHeight: qualityToMaxHeight(activeQuality),
               startTimeTicks: effectiveStartTicks,
               mediaSourceId: activeSource.Id,
               audioStreamIndex: preferredAudio?.Index,
@@ -361,7 +387,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
             activeSource,
             activePlaySessionId,
             preferredAudio?.Index,
-            preferences.quality,
+            activeQuality,
             preferredSub?.Index
           ),
           startSeconds,
@@ -410,7 +436,6 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     serverUrl,
     accessToken,
     user,
-    preferences.quality,
     preferences.preferredAudioLang,
     preferences.preferredSubtitleLang,
   ]);
@@ -422,6 +447,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
 
     lastTimeUpdateRef.current = -1;
     ignoreNextSeekSyncRef.current = false;
+    setActivePlayMethodOverride(null);
     setIsBuffering(true);
 
     if (hlsRef.current) {
@@ -493,6 +519,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
             hls.destroy();
             hlsRef.current = null;
             appliedResume = startSeconds <= 0;
+            setActivePlayMethodOverride('DirectPlay');
             listenForMetadata(true);
             video.src = builtStream.fallbackUrl;
           } else {
@@ -511,6 +538,10 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
       if (seekFeedbackTimerRef.current) {
         window.clearTimeout(seekFeedbackTimerRef.current);
         seekFeedbackTimerRef.current = null;
+      }
+      if (seekPreviewTimerRef.current) {
+        window.clearTimeout(seekPreviewTimerRef.current);
+        seekPreviewTimerRef.current = null;
       }
       if (seekSyncTimerRef.current) {
         window.clearTimeout(seekSyncTimerRef.current);
@@ -785,13 +816,16 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     };
   }, []);
 
-  // Lock document scroll while fullscreen player is open
+  // Lock document scroll while fullscreen player is open and allow full 100vw coverage
   useEffect(() => {
     const html = document.documentElement;
     const prevOverflow = html.style.overflow;
+    const prevScrollbarGutter = html.style.scrollbarGutter;
     html.style.overflow = 'hidden';
+    html.style.scrollbarGutter = 'auto';
     return () => {
       html.style.overflow = prevOverflow;
+      html.style.scrollbarGutter = prevScrollbarGutter;
     };
   }, []);
 
@@ -940,9 +974,11 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     nextSubIdx: number | undefined,
     savedTime: number,
     totalDurationSeconds: number,
-    needsBurnIn: boolean
+    needsBurnIn: boolean,
+    qualityOverride?: StreamingQuality
   ) => {
     if (!serverUrl || !accessToken || !user?.Id) return;
+    const targetQuality = qualityOverride ?? selectedQuality;
     let resolvedSource = targetSource;
     let resolvedSessionId = playSessionId;
 
@@ -953,14 +989,15 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
       resolvedSource,
       resolvedSessionId,
       nextAudioIdx,
-      preferences.quality,
+      targetQuality,
       nextSubIdx
     );
 
-    if (preview.playMethod === 'Transcode') {
+    if (preview.playMethod === 'Transcode' || qualityOverride !== undefined) {
       const renegotiated = await jellyfinApi
         .getPlaybackInfo(serverUrl, accessToken, user.Id, activeItem.Id, {
-          maxStreamingBitrate: qualityToBitrate(preferences.quality),
+          maxStreamingBitrate: qualityToBitrate(targetQuality),
+          maxHeight: qualityToMaxHeight(targetQuality),
           startTimeTicks: secondsToTicks(savedTime),
           mediaSourceId: targetSource.Id,
           audioStreamIndex: nextAudioIdx,
@@ -987,12 +1024,33 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         resolvedSource,
         resolvedSessionId,
         nextAudioIdx,
-        preferences.quality,
+        targetQuality,
         nextSubIdx
       ),
       startSeconds: savedTime > 0 ? savedTime : 0,
       durationSeconds: totalDurationSeconds,
     });
+  };
+
+  const handleSelectQuality = async (nextQuality: StreamingQuality) => {
+    if (!serverUrl || !accessToken || !mediaSource) return;
+    setOpenMenu(null);
+    if (nextQuality === selectedQuality) return;
+
+    const savedTime = videoRef.current?.currentTime ?? currentTime;
+    const subNeedsBurnIn = builtStream?.encodedSubtitleIndex !== undefined;
+    setSelectedQuality(nextQuality);
+    updatePreferences({ quality: nextQuality });
+
+    await applyNegotiatedStream(
+      mediaSource,
+      selectedAudioIndex,
+      selectedSubtitleIndex,
+      savedTime,
+      builtStream?.durationSeconds ?? duration,
+      subNeedsBurnIn,
+      nextQuality
+    );
   };
 
   const handleSwitchAudio = async (audioIdx: number) => {
@@ -1046,7 +1104,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           nextSource,
           playSessionId,
           nextAudio?.Index,
-          preferences.quality,
+          selectedQuality,
           nextSub.Index
         ).encodedSubtitleIndex !== undefined
     );
@@ -1133,7 +1191,8 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     const savedTime = videoRef.current?.currentTime ?? currentTime;
     const info = await jellyfinApi
       .getPlaybackInfo(serverUrl, accessToken, user.Id, activeItem.Id, {
-        maxStreamingBitrate: qualityToBitrate(preferences.quality),
+        maxStreamingBitrate: qualityToBitrate(selectedQuality),
+        maxHeight: qualityToMaxHeight(selectedQuality),
         startTimeTicks: secondsToTicks(savedTime),
         mediaSourceId: mediaSource.Id,
         audioStreamIndex: selectedAudioIndex,
@@ -1154,7 +1213,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           updatedSource,
           info?.PlaySessionId ?? playSessionId,
           selectedAudioIndex,
-          preferences.quality,
+          selectedQuality,
           selectedSubtitleIndex
         ),
         startSeconds: savedTime > 0 ? savedTime : 0,
@@ -1758,6 +1817,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           progressPercent={progressPercent}
           volume={volume}
           isMuted={isMuted}
+          selectedQuality={selectedQuality}
           supportsPiP={supportsPiP}
           isPiP={isPiP}
           isFullscreen={isFullscreen}
@@ -1782,6 +1842,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           audioStreams={audioStreams}
           selectedAudioIndex={selectedAudioIndex}
           builtStream={builtStream}
+          activePlayMethod={activePlayMethodOverride ?? builtStream?.playMethod}
           selectedSubtitleIndex={selectedSubtitleIndex}
           deletableSubtitleIndices={(mediaSource?.MediaStreams ?? [])
             .filter((s) => s.Type === 'Subtitle' && s.IsExternal)
@@ -1802,10 +1863,23 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
             setCurrentTime(next);
             if (duration > 0) {
               setSeekPreview({ time: next, percent: (next / duration) * 100 });
+              if (seekPreviewTimerRef.current) {
+                window.clearTimeout(seekPreviewTimerRef.current);
+              }
+              seekPreviewTimerRef.current = window.setTimeout(() => {
+                setSeekPreview(null);
+                seekPreviewTimerRef.current = null;
+              }, 900);
             }
           }}
           onUpdateSeekPreviewFromClientX={updateSeekPreviewFromClientX}
-          onClearSeekPreview={() => setSeekPreview(null)}
+          onClearSeekPreview={() => {
+            if (seekPreviewTimerRef.current) {
+              window.clearTimeout(seekPreviewTimerRef.current);
+              seekPreviewTimerRef.current = null;
+            }
+            setSeekPreview(null);
+          }}
           onTileError={(url) => setFailedTiles((prev) => ({ ...prev, [url]: true }))}
           onBumpControls={bumpControls}
           onToggleMute={() => {
@@ -1844,6 +1918,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           onDownloadRemoteSubtitle={(subId) => void handleDownloadRemoteSubtitle(subId)}
           onUploadSubtitleFile={(file) => void handleUploadSubtitleFile(file)}
           onDeleteSubtitle={(idx) => void handleDeleteSubtitle(idx)}
+          onSelectQuality={(q) => void handleSelectQuality(q)}
           onSelectPlaybackRate={(rate) => {
             setPlaybackRate(rate);
             if (videoRef.current) videoRef.current.playbackRate = rate;

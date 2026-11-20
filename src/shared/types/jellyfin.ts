@@ -321,7 +321,7 @@ export interface PlaybackInfoResponse {
   ErrorCode?: string;
 }
 
-export type StreamingQuality = 'auto' | '1080p' | '720p' | '480p';
+export type StreamingQuality = 'auto' | '1080p' | '720p' | '480p' | '360p';
 
 export interface UserPreferences {
   quality: StreamingQuality;

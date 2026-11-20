@@ -689,6 +689,7 @@ export const jellyfinApi = {
     itemId: string,
     options: {
       maxStreamingBitrate?: number;
+      maxHeight?: number;
       audioStreamIndex?: number;
       subtitleStreamIndex?: number;
       startTimeTicks?: number;
@@ -738,11 +739,28 @@ export const jellyfinApi = {
             MinSegments: 1,
           },
         ],
+        ...(options.maxHeight
+          ? {
+              CodecProfiles: [
+                {
+                  Type: 'Video',
+                  Conditions: [
+                    {
+                      Condition: 'LessThanEqual',
+                      Property: 'Height',
+                      Value: String(options.maxHeight),
+                      IsRequired: true,
+                    },
+                  ],
+                },
+              ],
+            }
+          : {}),
         SubtitleProfiles: [
           { Format: 'vtt', Method: 'External' },
           { Format: 'srt', Method: 'External' },
-          { Format: 'ass', Method: 'Encode' },
-          { Format: 'ssa', Method: 'Encode' },
+          { Format: 'ass', Method: 'External' },
+          { Format: 'ssa', Method: 'External' },
           { Format: 'pgssub', Method: 'Encode' },
           { Format: 'pgs', Method: 'Encode' },
           { Format: 'dvdsub', Method: 'Encode' },

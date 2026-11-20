@@ -136,6 +136,7 @@ export const ProfileSettingsPage: React.FC = () => {
     { value: '1080p', label: t.settings.quality1080Label, desc: t.settings.quality1080Desc },
     { value: '720p', label: t.settings.quality720Label, desc: t.settings.quality720Desc },
     { value: '480p', label: t.settings.quality480Label, desc: t.settings.quality480Desc },
+    { value: '360p', label: t.settings.quality360Label, desc: t.settings.quality360Desc },
   ];
 
   const avatar = user && serverUrl ? getUserAvatarUrl(serverUrl, user) : null;

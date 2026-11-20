@@ -41,7 +41,7 @@ export class JellyfinSocketClient {
 
     const wsBase = normalized.replace(/^http:/i, 'ws:').replace(/^https:/i, 'wss:');
     const deviceId = getOrCreateDeviceId();
-    const url = `${wsBase}/socket?api_key=${encodeURIComponent(this.accessToken)}&deviceId=${encodeURIComponent(deviceId)}`;
+    const url = `${wsBase}/socket?ApiKey=${encodeURIComponent(this.accessToken)}&deviceId=${encodeURIComponent(deviceId)}`;
 
     try {
       this.socket = new WebSocket(url);

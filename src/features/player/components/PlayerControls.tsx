@@ -24,6 +24,7 @@ import {
   PlaystateCommandData,
   RemoteSubtitleInfo,
   SessionInfoDto,
+  StreamingQuality,
   SyncPlayGroupDto,
 } from '../../../shared/types/jellyfin';
 import { formatPlayerTime, ticksToSeconds } from '../../../shared/utils/time';
@@ -44,6 +45,7 @@ interface PlayerControlsProps {
   progressPercent: number;
   volume: number;
   isMuted: boolean;
+  selectedQuality: StreamingQuality;
   supportsPiP: boolean;
   isPiP: boolean;
   isFullscreen: boolean;
@@ -68,6 +70,7 @@ interface PlayerControlsProps {
   audioStreams: MediaStream[];
   selectedAudioIndex: number | undefined;
   builtStream: BuiltPlaybackStream | null;
+  activePlayMethod?: 'DirectPlay' | 'DirectStream' | 'Transcode';
   selectedSubtitleIndex: number;
   deletableSubtitleIndices: number[];
   remoteSubLang: string;
@@ -111,6 +114,7 @@ interface PlayerControlsProps {
   onDownloadRemoteSubtitle: (subtitleId: string) => void;
   onUploadSubtitleFile: (file: File) => void;
   onDeleteSubtitle: (index: number) => void;
+  onSelectQuality: (quality: StreamingQuality) => void;
   onSelectPlaybackRate: (rate: number) => void;
   onTogglePiP: () => void;
   onToggleFullscreen: () => void;
@@ -130,6 +134,7 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
   progressPercent,
   volume,
   isMuted,
+  selectedQuality,
   supportsPiP,
   isPiP,
   isFullscreen,
@@ -154,6 +159,7 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
   audioStreams,
   selectedAudioIndex,
   builtStream,
+  activePlayMethod,
   selectedSubtitleIndex,
   deletableSubtitleIndices,
   remoteSubLang,
@@ -197,6 +203,7 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
   onDownloadRemoteSubtitle,
   onUploadSubtitleFile,
   onDeleteSubtitle,
+  onSelectQuality,
   onSelectPlaybackRate,
   onTogglePiP,
   onToggleFullscreen,
@@ -370,6 +377,8 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
               value={currentTime}
               aria-label={t.player.seekPositionAria}
               onChange={(e) => onSeekTo(Number(e.target.value))}
+              onBlur={onClearSeekPreview}
+              onMouseLeave={onClearSeekPreview}
               onPointerUp={onClearSeekPreview}
               onPointerCancel={onClearSeekPreview}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer touch-none"
@@ -382,8 +391,8 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
         </div>
 
         {/* Playback control buttons */}
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 sm:gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
+          <div className="flex items-center gap-1 sm:gap-3">
             <button
               type="button"
               onClick={onTogglePlayPause}
@@ -447,14 +456,14 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
           </div>
 
           {/* Right controls */}
-          <div ref={menusContainerRef} className="relative flex items-center gap-1 sm:gap-2">
+          <div ref={menusContainerRef} className="relative flex flex-wrap items-center justify-end gap-0.5 sm:gap-2 flex-1 min-w-0">
             {nextEpisode && (
               <button
                 type="button"
                 onClick={onPlayNextEpisode}
                 title={t.player.nextEpisodeTitle}
                 aria-label={t.player.nextEpisodeTitle}
-                className="inline-flex items-center justify-center gap-1.5 min-w-[40px] min-h-[38px] px-3 py-2 rounded-lg text-xs sm:text-sm font-medium text-zinc-200 hover:text-white hover:bg-white/10 transition-colors"
+                className="inline-flex items-center justify-center gap-1.5 min-w-[36px] sm:min-w-[40px] min-h-[36px] sm:min-h-[38px] px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium text-zinc-200 hover:text-white hover:bg-white/10 transition-colors"
               >
                 <SkipForward className="w-4 h-4" />
                 <span className="hidden md:inline">{t.player.nextShortBtn}</span>
@@ -476,6 +485,7 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
               selectedAudioIndex={selectedAudioIndex}
               onSelectAudio={onSelectAudio}
               builtStream={builtStream}
+              activePlayMethod={activePlayMethod}
               selectedSubtitleIndex={selectedSubtitleIndex}
               onSelectSubtitle={onSelectSubtitle}
               deletableSubtitleIndices={deletableSubtitleIndices}
@@ -487,6 +497,8 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
               onDownloadRemoteSubtitle={onDownloadRemoteSubtitle}
               onUploadSubtitleFile={onUploadSubtitleFile}
               onDeleteSubtitle={onDeleteSubtitle}
+              selectedQuality={selectedQuality}
+              onSelectQuality={onSelectQuality}
               playbackRate={playbackRate}
               onSelectPlaybackRate={onSelectPlaybackRate}
               castSessions={castSessions}
@@ -519,7 +531,7 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
                 onClick={onTogglePiP}
                 title={t.player.pipTitle}
                 aria-label={t.player.pipAria}
-                className={`p-2.5 rounded-lg transition-colors ${
+                className={`p-2 sm:p-2.5 rounded-lg transition-colors ${
                   isPiP
                     ? 'bg-white/20 text-[#7dd3fc]'
                     : 'text-zinc-200 hover:text-white hover:bg-white/10'
@@ -534,7 +546,7 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
               onClick={onToggleFullscreen}
               title={t.player.fullscreenTitle}
               aria-label={t.player.fullscreenAria}
-              className="p-2.5 rounded-lg text-zinc-200 hover:text-white hover:bg-white/10 transition-colors"
+              className="p-2 sm:p-2.5 rounded-lg text-zinc-200 hover:text-white hover:bg-white/10 transition-colors"
             >
               {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
             </button>

@@ -274,6 +274,8 @@ export interface TranslationDictionary {
     quality720Desc: string;
     quality480Label: string;
     quality480Desc: string;
+    quality360Label: string;
+    quality360Desc: string;
     autoPlayNextTitle: string;
     autoPlayNextDesc: string;
     autoSkipIntroTitle: string;
@@ -342,6 +344,16 @@ export interface TranslationDictionary {
     subtitlesHeading: string;
     subtitlesOff: string;
     noExternalSubtitles: string;
+    qualityTitle: string;
+    qualitySelectAria: string;
+    qualityHeading: string;
+    qualityAutoOption: string;
+    quality1080Option: string;
+    quality720Option: string;
+    quality480Option: string;
+    quality360Option: string;
+    playMethodDirect: string;
+    playMethodTranscode: string;
     playbackSpeedAria: string;
     pipTitle: string;
     pipAria: string;
@@ -654,6 +666,8 @@ const en: TranslationDictionary = {
     quality720Desc: 'Balanced smoothness and bandwidth usage',
     quality480Label: 'SD 480p (3 Mbps)',
     quality480Desc: 'Recommended for limited mobile connections',
+    quality360Label: 'Low 360p (1.5 Mbps)',
+    quality360Desc: 'Minimum data usage on slow connections',
     autoPlayNextTitle: 'Auto-play next episode',
     autoPlayNextDesc: 'Automatically continue with the next episode when one finishes.',
     autoSkipIntroTitle: 'Auto-skip intro',
@@ -722,6 +736,16 @@ const en: TranslationDictionary = {
     subtitlesHeading: 'Subtitles',
     subtitlesOff: 'Off',
     noExternalSubtitles: 'No external subtitles available',
+    qualityTitle: 'Video quality',
+    qualitySelectAria: 'Select video quality',
+    qualityHeading: 'Video quality',
+    qualityAutoOption: 'Auto (Direct Play)',
+    quality1080Option: '1080p · 20 Mbps',
+    quality720Option: '720p · 8 Mbps',
+    quality480Option: '480p · 3 Mbps',
+    quality360Option: '360p · 1.5 Mbps',
+    playMethodDirect: 'Direct Play',
+    playMethodTranscode: 'Transcoding',
     playbackSpeedAria: 'Playback speed',
     pipTitle: 'Picture-in-Picture (P)',
     pipAria: 'Toggle Picture-in-Picture',
@@ -1035,6 +1059,8 @@ const es: TranslationDictionary = {
     quality720Desc: 'Equilibrio entre fluidez y ahorro de ancho de banda',
     quality480Label: 'SD 480p (3 Mbps)',
     quality480Desc: 'Recomendado para conexiones móviles limitadas',
+    quality360Label: 'Baja 360p (1.5 Mbps)',
+    quality360Desc: 'Mínimo consumo de datos en redes lentas',
     autoPlayNextTitle: 'Reproducir siguiente episodio automáticamente',
     autoPlayNextDesc: 'Al terminar un capítulo, continúa automáticamente con el siguiente.',
     autoSkipIntroTitle: 'Saltar introducción automáticamente',
@@ -1103,6 +1129,16 @@ const es: TranslationDictionary = {
     subtitlesHeading: 'Subtítulos',
     subtitlesOff: 'Desactivados',
     noExternalSubtitles: 'Sin subtítulos externos disponibles',
+    qualityTitle: 'Calidad de video',
+    qualitySelectAria: 'Seleccionar calidad de video',
+    qualityHeading: 'Calidad de video',
+    qualityAutoOption: 'Automática (Direct Play)',
+    quality1080Option: '1080p · 20 Mbps',
+    quality720Option: '720p · 8 Mbps',
+    quality480Option: '480p · 3 Mbps',
+    quality360Option: '360p · 1.5 Mbps',
+    playMethodDirect: 'Reproducción directa',
+    playMethodTranscode: 'Transcodificando',
     playbackSpeedAria: 'Velocidad de reproducción',
     pipTitle: 'Imagen en imagen (P)',
     pipAria: 'Alternar imagen en imagen',

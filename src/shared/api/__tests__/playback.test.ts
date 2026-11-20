@@ -5,6 +5,8 @@ import {
   getChapterImageUrl,
   getSubtitleFontAttachments,
   getUserAvatarUrl,
+  qualityToBitrate,
+  qualityToMaxHeight,
 } from '../playback';
 import { MediaSourceInfo } from '../../types/jellyfin';
 
@@ -95,12 +97,36 @@ describe('playback stream builder', () => {
     expect(stream.allSubtitles[0]).toMatchObject({
       index: 2,
       delivery: 'ass',
-      src: 'https://jf.test/Videos/item-2/src-ass/Subtitles/2/0/Stream.ass?api_key=tok',
-      fallbackVttSrc: 'https://jf.test/Videos/item-2/src-ass/Subtitles/2/0/Stream.vtt?api_key=tok',
+      src: 'https://jf.test/Videos/item-2/src-ass/Subtitles/2/0/Stream.ass?ApiKey=tok',
+      fallbackVttSrc: 'https://jf.test/Videos/item-2/src-ass/Subtitles/2/0/Stream.vtt?ApiKey=tok',
     });
 
     expect(getSubtitleFontAttachments('https://jf.test', 'item-2', assSource, 'tok')).toEqual([
-      'https://jf.test/Videos/item-2/src-ass/Attachments/3?api_key=tok',
+      'https://jf.test/Videos/item-2/src-ass/Attachments/3?ApiKey=tok',
     ]);
+  });
+
+  it('caps transcode stream bitrate and height when a lower quality tier is selected', () => {
+    const hdSource: MediaSourceInfo = {
+      Id: 'src-hd',
+      Container: 'mp4',
+      SupportsDirectPlay: true,
+      DefaultAudioStreamIndex: 1,
+      Bitrate: 15_000_000,
+      MediaStreams: [
+        { Type: 'Video', Index: 0, Codec: 'h264', Height: 1080 },
+        { Type: 'Audio', Index: 1, Codec: 'aac', Language: 'eng' },
+      ],
+    };
+
+    expect(qualityToBitrate('360p')).toBe(1_500_000);
+    expect(qualityToMaxHeight('720p')).toBe(720);
+    expect(qualityToMaxHeight('auto')).toBeUndefined();
+
+    const stream = buildPlaybackStream('https://jf.test', 'tok', 'item-3', hdSource, 'sess-4', 1, '720p');
+    expect(stream.playMethod).toBe('Transcode');
+    expect(stream.isHls).toBe(true);
+    expect(stream.streamUrl).toContain('VideoBitrate=8000000');
+    expect(stream.streamUrl).toContain('MaxHeight=720');
   });
 });

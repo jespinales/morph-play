@@ -11,6 +11,7 @@ import {
   Repeat,
   Search,
   Send,
+  Settings,
   Shuffle,
   SkipBack,
   SkipForward,
@@ -30,6 +31,7 @@ import {
   PlaystateCommandData,
   RemoteSubtitleInfo,
   SessionInfoDto,
+  StreamingQuality,
   SyncPlayGroupDto,
 } from '../../../shared/types/jellyfin';
 import { formatPlayerTime, ticksToSeconds } from '../../../shared/utils/time';
@@ -39,6 +41,7 @@ export type PlayerMenuKind =
   | 'versions'
   | 'audio'
   | 'subtitles'
+  | 'quality'
   | 'speed'
   | 'cast'
   | 'syncplay'
@@ -59,6 +62,7 @@ interface TrackMenusProps {
   selectedAudioIndex: number | undefined;
   onSelectAudio: (audioIdx: number) => void;
   builtStream: BuiltPlaybackStream | null;
+  activePlayMethod?: 'DirectPlay' | 'DirectStream' | 'Transcode';
   selectedSubtitleIndex: number;
   onSelectSubtitle: (subIdx: number) => void;
   deletableSubtitleIndices: number[];
@@ -70,6 +74,8 @@ interface TrackMenusProps {
   onDownloadRemoteSubtitle: (subtitleId: string) => void;
   onUploadSubtitleFile: (file: File) => void;
   onDeleteSubtitle: (index: number) => void;
+  selectedQuality: StreamingQuality;
+  onSelectQuality: (quality: StreamingQuality) => void;
   playbackRate: number;
   onSelectPlaybackRate: (rate: number) => void;
   castSessions: SessionInfoDto[];
@@ -127,6 +133,7 @@ export const TrackMenus: React.FC<TrackMenusProps> = ({
   selectedAudioIndex,
   onSelectAudio,
   builtStream,
+  activePlayMethod,
   selectedSubtitleIndex,
   onSelectSubtitle,
   deletableSubtitleIndices,
@@ -138,6 +145,8 @@ export const TrackMenus: React.FC<TrackMenusProps> = ({
   onDownloadRemoteSubtitle,
   onUploadSubtitleFile,
   onDeleteSubtitle,
+  selectedQuality,
+  onSelectQuality,
   playbackRate,
   onSelectPlaybackRate,
   castSessions,
@@ -164,6 +173,7 @@ export const TrackMenus: React.FC<TrackMenusProps> = ({
   onSyncPlayQueueStep,
 }) => {
   const { t } = usePreferences();
+  const effectivePlayMethod = activePlayMethod ?? builtStream?.playMethod;
 
   return (
     <>
@@ -174,7 +184,7 @@ export const TrackMenus: React.FC<TrackMenusProps> = ({
             onClick={() => onToggleMenu('chapters')}
             title={t.player.chaptersTitle}
             aria-label={t.player.chaptersSelectAria}
-            className={`p-2.5 rounded-lg transition-colors ${
+            className={`p-2 sm:p-2.5 rounded-lg transition-colors ${
               openMenu === 'chapters'
                 ? 'bg-white/20 text-white'
                 : 'text-zinc-200 hover:text-white hover:bg-white/10'
@@ -183,7 +193,7 @@ export const TrackMenus: React.FC<TrackMenusProps> = ({
             <Bookmark className="w-5 h-5" />
           </button>
           {openMenu === 'chapters' && (
-            <div className="absolute right-0 bottom-12 w-72 max-w-[calc(100vw-2rem)] max-h-[52vh] overflow-y-auto overscroll-contain rounded-xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 p-2 shadow-2xl space-y-1">
+            <div className="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 bottom-28 sm:bottom-12 z-40 sm:w-72 max-h-[52vh] overflow-y-auto overscroll-contain rounded-xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 p-2 shadow-2xl space-y-1">
               <p className="px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-zinc-400">
                 {t.player.chaptersHeading}
               </p>
@@ -236,7 +246,7 @@ export const TrackMenus: React.FC<TrackMenusProps> = ({
             onClick={() => onToggleMenu('versions')}
             title={t.player.versionsTitle}
             aria-label={t.player.versionsSelectAria}
-            className={`p-2.5 rounded-lg transition-colors ${
+            className={`p-2 sm:p-2.5 rounded-lg transition-colors ${
               openMenu === 'versions'
                 ? 'bg-white/20 text-white'
                 : 'text-zinc-200 hover:text-white hover:bg-white/10'
@@ -245,7 +255,7 @@ export const TrackMenus: React.FC<TrackMenusProps> = ({
             <Layers className="w-5 h-5" />
           </button>
           {openMenu === 'versions' && (
-            <div className="absolute right-0 bottom-12 w-64 max-w-[calc(100vw-2rem)] max-h-[52vh] overflow-y-auto overscroll-contain rounded-xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 p-2 shadow-2xl space-y-1">
+            <div className="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 bottom-28 sm:bottom-12 z-40 sm:w-64 max-h-[52vh] overflow-y-auto overscroll-contain rounded-xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 p-2 shadow-2xl space-y-1">
               <p className="px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-zinc-400">
                 {t.player.versionsHeading}
               </p>
@@ -274,7 +284,7 @@ export const TrackMenus: React.FC<TrackMenusProps> = ({
             onClick={() => onToggleMenu('audio')}
             title={t.player.audioTracksTitle}
             aria-label={t.player.audioSelectAria}
-            className={`p-2.5 rounded-lg transition-colors ${
+            className={`p-2 sm:p-2.5 rounded-lg transition-colors ${
               openMenu === 'audio'
                 ? 'bg-white/20 text-white'
                 : 'text-zinc-200 hover:text-white hover:bg-white/10'
@@ -283,7 +293,7 @@ export const TrackMenus: React.FC<TrackMenusProps> = ({
             <AudioLines className="w-5 h-5" />
           </button>
           {openMenu === 'audio' && (
-            <div className="absolute right-0 bottom-12 w-60 max-w-[calc(100vw-2rem)] max-h-[52vh] overflow-y-auto overscroll-contain rounded-xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 p-2 shadow-2xl space-y-1">
+            <div className="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 bottom-28 sm:bottom-12 z-40 sm:w-64 max-h-[52vh] overflow-y-auto overscroll-contain rounded-xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 p-2 shadow-2xl space-y-1">
               <p className="px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-zinc-400">
                 {t.player.audioHeading}
               </p>
@@ -315,7 +325,7 @@ export const TrackMenus: React.FC<TrackMenusProps> = ({
           onClick={() => onToggleMenu('subtitles')}
           title={t.player.subtitlesTitle}
           aria-label={t.player.subtitlesSelectAria}
-          className={`p-2.5 rounded-lg transition-colors ${
+          className={`p-2 sm:p-2.5 rounded-lg transition-colors ${
             selectedSubtitleIndex !== -1 || openMenu === 'subtitles'
               ? 'bg-white/20 text-[#7dd3fc]'
               : 'text-zinc-200 hover:text-white hover:bg-white/10'
@@ -324,7 +334,7 @@ export const TrackMenus: React.FC<TrackMenusProps> = ({
           <Captions className="w-5 h-5" />
         </button>
         {openMenu === 'subtitles' && (
-          <div className="absolute right-0 bottom-12 w-72 max-w-[calc(100vw-2rem)] max-h-[60vh] overflow-y-auto overscroll-contain rounded-xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 p-2.5 shadow-2xl space-y-1.5">
+          <div className="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 bottom-28 sm:bottom-12 z-40 sm:w-72 max-h-[56vh] overflow-y-auto overscroll-contain rounded-xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 p-2.5 shadow-2xl space-y-1.5">
             <p className="px-2 py-1 text-xs font-bold uppercase tracking-wider text-zinc-400">
               {t.player.subtitlesHeading}
             </p>
@@ -381,6 +391,8 @@ export const TrackMenus: React.FC<TrackMenusProps> = ({
             <div className="pt-2 mt-2 border-t border-white/10 space-y-2">
               <div className="flex items-center gap-1.5">
                 <select
+                  id="player-remote-sub-lang"
+                  name="remoteSubLang"
                   aria-label={t.player.remoteSubtitlesLangLabel}
                   value={remoteSubLang}
                   onChange={(e) => onRemoteSubLangChange(e.target.value)}
@@ -444,6 +456,8 @@ export const TrackMenus: React.FC<TrackMenusProps> = ({
                 <Upload className="w-3.5 h-3.5" />
                 <span>{t.player.uploadSubtitleBtn}</span>
                 <input
+                  id="player-subtitle-upload"
+                  name="subtitleFile"
                   type="file"
                   accept=".srt,.vtt,.ass,.ssa,.sub"
                   className="hidden"
@@ -465,7 +479,7 @@ export const TrackMenus: React.FC<TrackMenusProps> = ({
           onClick={() => onToggleMenu('syncplay')}
           title={t.player.syncPlayTitle}
           aria-label={t.player.syncPlaySelectAria}
-          className={`p-2.5 rounded-lg transition-colors ${
+          className={`p-2 sm:p-2.5 rounded-lg transition-colors ${
             activeSyncPlayGroup || openMenu === 'syncplay'
               ? 'bg-[#00A4DC]/25 text-[#7dd3fc]'
               : 'text-zinc-200 hover:text-white hover:bg-white/10'
@@ -474,7 +488,7 @@ export const TrackMenus: React.FC<TrackMenusProps> = ({
           <Users className="w-5 h-5" />
         </button>
         {openMenu === 'syncplay' && (
-          <div className="absolute right-0 bottom-12 w-72 max-w-[calc(100vw-2rem)] max-h-[55vh] overflow-y-auto overscroll-contain rounded-xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 p-3 shadow-2xl space-y-2.5">
+          <div className="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 bottom-28 sm:bottom-12 z-40 sm:w-72 max-h-[55vh] overflow-y-auto overscroll-contain rounded-xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 p-3 shadow-2xl space-y-2.5">
             <p className="text-xs font-bold uppercase tracking-wider text-zinc-400">
               {t.player.syncPlayHeading}
             </p>
@@ -595,6 +609,8 @@ export const TrackMenus: React.FC<TrackMenusProps> = ({
 
                 <form onSubmit={onCreateSyncPlayGroup} className="flex gap-1.5 pt-2 border-t border-white/10">
                   <input
+                    id="player-syncplay-group-name"
+                    name="syncPlayGroupName"
                     type="text"
                     value={syncPlayGroupInput}
                     onChange={(e) => onSyncPlayGroupInputChange(e.target.value)}
@@ -620,7 +636,7 @@ export const TrackMenus: React.FC<TrackMenusProps> = ({
           onClick={() => onToggleMenu('cast')}
           title={t.player.castTitle}
           aria-label={t.player.castSelectAria}
-          className={`p-2.5 rounded-lg transition-colors ${
+          className={`p-2 sm:p-2.5 rounded-lg transition-colors ${
             openMenu === 'cast'
               ? 'bg-white/20 text-[#7dd3fc]'
               : 'text-zinc-200 hover:text-white hover:bg-white/10'
@@ -629,7 +645,7 @@ export const TrackMenus: React.FC<TrackMenusProps> = ({
           <Cast className="w-5 h-5" />
         </button>
         {openMenu === 'cast' && (
-          <div className="absolute right-0 bottom-12 w-72 max-w-[calc(100vw-2rem)] max-h-[55vh] overflow-y-auto overscroll-contain rounded-xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 p-2.5 shadow-2xl space-y-2">
+          <div className="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 bottom-28 sm:bottom-12 z-40 sm:w-72 max-h-[55vh] overflow-y-auto overscroll-contain rounded-xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 p-2.5 shadow-2xl space-y-2">
             <p className="px-1 text-xs font-bold uppercase tracking-wider text-zinc-400">
               {t.player.castHeading}
             </p>
@@ -712,6 +728,8 @@ export const TrackMenus: React.FC<TrackMenusProps> = ({
 
                 <form onSubmit={onSendCastMessage} className="flex gap-1.5">
                   <input
+                    id="player-cast-message"
+                    name="castMessage"
                     type="text"
                     value={castMessageInput}
                     onChange={(e) => onCastMessageInputChange(e.target.value)}
@@ -736,14 +754,68 @@ export const TrackMenus: React.FC<TrackMenusProps> = ({
       <div className="relative">
         <button
           type="button"
+          onClick={() => onToggleMenu('quality')}
+          title={t.player.qualityTitle}
+          aria-label={t.player.qualitySelectAria}
+          className={`p-2 sm:p-2.5 rounded-lg transition-colors ${
+            selectedQuality !== 'auto' || openMenu === 'quality'
+              ? 'bg-white/20 text-[#7dd3fc]'
+              : 'text-zinc-200 hover:text-white hover:bg-white/10'
+          }`}
+        >
+          <Settings className="w-5 h-5" />
+        </button>
+        {openMenu === 'quality' && (
+          <div className="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 bottom-28 sm:bottom-12 z-40 sm:w-72 max-h-[55vh] overflow-y-auto overscroll-contain rounded-xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 p-2 shadow-2xl space-y-1">
+            <div className="px-2.5 py-1 flex items-center justify-between gap-2">
+              <p className="text-xs font-bold uppercase tracking-wider text-zinc-400 whitespace-nowrap">
+                {t.player.qualityHeading}
+              </p>
+              {effectivePlayMethod && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-zinc-300 shrink-0 whitespace-nowrap">
+                  {effectivePlayMethod === 'DirectPlay'
+                    ? t.player.playMethodDirect
+                    : t.player.playMethodTranscode}
+                </span>
+              )}
+            </div>
+            {(
+              [
+                { value: 'auto', label: t.player.qualityAutoOption },
+                { value: '1080p', label: t.player.quality1080Option },
+                { value: '720p', label: t.player.quality720Option },
+                { value: '480p', label: t.player.quality480Option },
+                { value: '360p', label: t.player.quality360Option },
+              ] as Array<{ value: StreamingQuality; label: string }>
+            ).map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => onSelectQuality(opt.value)}
+                className={`w-full text-left px-3 py-2 rounded-lg text-xs sm:text-sm transition-colors ${
+                  selectedQuality === opt.value
+                    ? 'bg-[#00A4DC]/25 text-[#7dd3fc] font-semibold'
+                    : 'text-zinc-200 hover:bg-white/10'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="relative">
+        <button
+          type="button"
           onClick={() => onToggleMenu('speed')}
           aria-label={t.player.playbackSpeedAria}
-          className="min-w-[40px] min-h-[38px] px-2.5 py-2 rounded-lg text-xs font-bold text-zinc-200 hover:text-white hover:bg-white/10 transition-colors inline-flex items-center justify-center"
+          className="min-w-[36px] sm:min-w-[40px] min-h-[36px] sm:min-h-[38px] px-2 sm:px-2.5 py-1.5 sm:py-2 rounded-lg text-xs font-bold text-zinc-200 hover:text-white hover:bg-white/10 transition-colors inline-flex items-center justify-center"
         >
           {playbackRate}x
         </button>
         {openMenu === 'speed' && (
-          <div className="absolute right-0 bottom-12 w-32 max-w-[calc(100vw-2rem)] max-h-[52vh] overflow-y-auto overscroll-contain rounded-xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 p-1.5 shadow-2xl space-y-1">
+          <div className="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 bottom-28 sm:bottom-12 z-40 sm:w-32 max-h-[52vh] overflow-y-auto overscroll-contain rounded-xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 p-1.5 shadow-2xl space-y-1">
             {[0.75, 1, 1.25, 1.5, 2].map((rate) => (
               <button
                 key={rate}

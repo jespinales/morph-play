@@ -117,14 +117,14 @@ export function getItemDownloadUrl(serverUrl: string, itemId: string, token: str
   if (isDemoServer(serverUrl) || !token) return null;
   const base = normalizeServerUrl(serverUrl);
   if (!base) return null;
-  return `${base}/Items/${encodeURIComponent(itemId)}/Download?api_key=${encodeURIComponent(token)}`;
+  return `${base}/Items/${encodeURIComponent(itemId)}/Download?ApiKey=${encodeURIComponent(token)}`;
 }
 
 export function getThemeAudioUrl(serverUrl: string, itemId: string, token: string): string | null {
   if (isDemoServer(serverUrl) || !token) return null;
   const base = normalizeServerUrl(serverUrl);
   if (!base) return null;
-  return `${base}/Audio/${encodeURIComponent(itemId)}/stream?static=true&api_key=${encodeURIComponent(token)}`;
+  return `${base}/Audio/${encodeURIComponent(itemId)}/stream?static=true&ApiKey=${encodeURIComponent(token)}`;
 }
 
 export function getAttachmentUrl(
@@ -137,7 +137,7 @@ export function getAttachmentUrl(
   if (isDemoServer(serverUrl) || !token) return null;
   const base = normalizeServerUrl(serverUrl);
   if (!base) return null;
-  return `${base}/Videos/${encodeURIComponent(videoId)}/${encodeURIComponent(mediaSourceId)}/Attachments/${attachmentIndex}?api_key=${encodeURIComponent(token)}`;
+  return `${base}/Videos/${encodeURIComponent(videoId)}/${encodeURIComponent(mediaSourceId)}/Attachments/${attachmentIndex}?ApiKey=${encodeURIComponent(token)}`;
 }
 
 export function qualityToBitrate(quality: StreamingQuality): number {
@@ -148,9 +148,27 @@ export function qualityToBitrate(quality: StreamingQuality): number {
       return 8_000_000;
     case '480p':
       return 3_000_000;
+    case '360p':
+      return 1_500_000;
     case 'auto':
     default:
       return 120_000_000;
+  }
+}
+
+export function qualityToMaxHeight(quality: StreamingQuality): number | undefined {
+  switch (quality) {
+    case '1080p':
+      return 1080;
+    case '720p':
+      return 720;
+    case '480p':
+      return 480;
+    case '360p':
+      return 360;
+    case 'auto':
+    default:
+      return undefined;
   }
 }
 
@@ -212,7 +230,11 @@ export function getSubtitleFontAttachments(
 
     if (att.DeliveryUrl) {
       const resolved = att.DeliveryUrl.startsWith('/') ? `${base}${att.DeliveryUrl}` : `${base}/${att.DeliveryUrl}`;
-      urls.push(resolved.includes('api_key=') ? resolved : `${resolved}${resolved.includes('?') ? '&' : '?'}api_key=${encodeURIComponent(token)}`);
+      urls.push(
+        resolved.includes('ApiKey=') || resolved.includes('api_key=')
+          ? resolved
+          : `${resolved}${resolved.includes('?') ? '&' : '?'}ApiKey=${encodeURIComponent(token)}`
+      );
     } else {
       const url = getAttachmentUrl(serverUrl, itemId, mediaSource.Id, att.Index, token);
       if (url) urls.push(url);
@@ -262,8 +284,8 @@ export function buildPlaybackStream(
           label: s.DisplayTitle || s.Title || s.Language || `Subtitle ${s.Index}`,
           language: s.Language || 'en',
           delivery: 'ass' as const,
-          src: `${base}/Videos/${itemId}/${mediaSource.Id}/Subtitles/${s.Index}/0/Stream.${codec}?api_key=${encodeURIComponent(token)}`,
-          fallbackVttSrc: `${base}/Videos/${itemId}/${mediaSource.Id}/Subtitles/${s.Index}/0/Stream.vtt?api_key=${encodeURIComponent(token)}`,
+          src: `${base}/Videos/${itemId}/${mediaSource.Id}/Subtitles/${s.Index}/0/Stream.${codec}?ApiKey=${encodeURIComponent(token)}`,
+          fallbackVttSrc: `${base}/Videos/${itemId}/${mediaSource.Id}/Subtitles/${s.Index}/0/Stream.vtt?ApiKey=${encodeURIComponent(token)}`,
           isDefault: Boolean(s.IsDefault),
         };
       }
@@ -273,7 +295,7 @@ export function buildPlaybackStream(
         language: s.Language || 'en',
         delivery: canServeExternal ? ('external' as const) : ('encode' as const),
         src: canServeExternal
-          ? `${base}/Videos/${itemId}/${mediaSource.Id}/Subtitles/${s.Index}/0/Stream.vtt?api_key=${encodeURIComponent(token)}`
+          ? `${base}/Videos/${itemId}/${mediaSource.Id}/Subtitles/${s.Index}/0/Stream.vtt?ApiKey=${encodeURIComponent(token)}`
           : undefined,
         isDefault: Boolean(s.IsDefault),
       };
@@ -298,16 +320,20 @@ export function buildPlaybackStream(
       : undefined;
 
   const maxBitrate = qualityToBitrate(quality);
+  const maxHeight = qualityToMaxHeight(quality);
+  const videoStream = (mediaSource.MediaStreams ?? []).find((s) => s.Type === 'Video');
+  const withinMaxHeight = !maxHeight || !videoStream?.Height || videoStream.Height <= maxHeight;
+  const withinMaxBitrate = Boolean(mediaSource.Bitrate) && mediaSource.Bitrate! <= maxBitrate;
   const canDirectPlay =
     !encodedSub &&
     mediaSource.SupportsDirectPlay &&
-    quality === 'auto' &&
+    (quality === 'auto' || (withinMaxHeight && withinMaxBitrate)) &&
     ['mp4', 'm4v', 'webm'].includes((mediaSource.Container ?? '').toLowerCase()) &&
     (audioStreamIndex === undefined || audioStreamIndex === mediaSource.DefaultAudioStreamIndex);
 
   if (canDirectPlay) {
     return {
-      streamUrl: `${base}/Videos/${itemId}/stream?static=true&mediaSourceId=${encodeURIComponent(mediaSource.Id)}&api_key=${encodeURIComponent(token)}`,
+      streamUrl: `${base}/Videos/${itemId}/stream?static=true&mediaSourceId=${encodeURIComponent(mediaSource.Id)}&ApiKey=${encodeURIComponent(token)}`,
       isHls: false,
       playMethod: 'DirectPlay',
       allSubtitles,
@@ -329,7 +355,7 @@ export function buildPlaybackStream(
 
   const hlsParams = new URLSearchParams({
     MediaSourceId: mediaSource.Id,
-    api_key: token,
+    ApiKey: token,
     VideoCodec: 'h264',
     AudioCodec: 'aac,mp3',
     TranscodingMaxAudioChannels: '2',
@@ -339,6 +365,7 @@ export function buildPlaybackStream(
   });
   if (playSessionId) hlsParams.set('PlaySessionId', playSessionId);
   if (audioStreamIndex !== undefined) hlsParams.set('AudioStreamIndex', String(audioStreamIndex));
+  if (maxHeight) hlsParams.set('MaxHeight', String(maxHeight));
   if (encodedSub) {
     hlsParams.set('SubtitleStreamIndex', String(encodedSub.index));
     hlsParams.set('SubtitleMethod', 'Encode');
@@ -352,7 +379,7 @@ export function buildPlaybackStream(
 
   return {
     streamUrl,
-    fallbackUrl: `${base}/Videos/${itemId}/stream?static=true&mediaSourceId=${encodeURIComponent(mediaSource.Id)}&api_key=${encodeURIComponent(token)}`,
+    fallbackUrl: `${base}/Videos/${itemId}/stream?static=true&mediaSourceId=${encodeURIComponent(mediaSource.Id)}&ApiKey=${encodeURIComponent(token)}`,
     isHls: true,
     playMethod: 'Transcode',
     encodedSubtitleIndex: encodedSub?.index,
