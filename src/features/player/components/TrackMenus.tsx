@@ -193,7 +193,7 @@ export const TrackMenus: React.FC<TrackMenusProps> = ({
             <Bookmark className="w-5 h-5" />
           </button>
           {openMenu === 'chapters' && (
-            <div className="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 bottom-28 sm:bottom-12 z-40 sm:w-72 max-h-[52vh] overflow-y-auto overscroll-contain rounded-xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 p-2 shadow-2xl space-y-1">
+            <div className="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 bottom-28 sm:bottom-24 z-40 sm:w-72 max-h-[48vh] overflow-y-auto overscroll-contain rounded-xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 p-2 shadow-2xl space-y-1">
               <p className="px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-zinc-400">
                 {t.player.chaptersHeading}
               </p>
@@ -255,7 +255,7 @@ export const TrackMenus: React.FC<TrackMenusProps> = ({
             <Layers className="w-5 h-5" />
           </button>
           {openMenu === 'versions' && (
-            <div className="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 bottom-28 sm:bottom-12 z-40 sm:w-64 max-h-[52vh] overflow-y-auto overscroll-contain rounded-xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 p-2 shadow-2xl space-y-1">
+            <div className="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 bottom-28 sm:bottom-24 z-40 sm:w-72 max-h-[48vh] overflow-y-auto overscroll-contain rounded-xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 p-2 shadow-2xl space-y-1">
               <p className="px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-zinc-400">
                 {t.player.versionsHeading}
               </p>
@@ -293,7 +293,7 @@ export const TrackMenus: React.FC<TrackMenusProps> = ({
             <AudioLines className="w-5 h-5" />
           </button>
           {openMenu === 'audio' && (
-            <div className="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 bottom-28 sm:bottom-12 z-40 sm:w-64 max-h-[52vh] overflow-y-auto overscroll-contain rounded-xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 p-2 shadow-2xl space-y-1">
+            <div className="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 bottom-28 sm:bottom-24 z-40 sm:w-80 max-h-[48vh] overflow-y-auto overscroll-contain rounded-xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 p-2 shadow-2xl space-y-1">
               <p className="px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-zinc-400">
                 {t.player.audioHeading}
               </p>
@@ -308,10 +308,12 @@ export const TrackMenus: React.FC<TrackMenusProps> = ({
                       : 'text-zinc-200 hover:bg-white/10'
                   }`}
                 >
-                  {audio.DisplayTitle ||
-                    audio.Title ||
-                    audio.Language ||
-                    t.player.trackFallback(audio.Index)}
+                  <span className="line-clamp-2 leading-snug">
+                    {audio.DisplayTitle ||
+                      audio.Title ||
+                      audio.Language ||
+                      t.player.trackFallback(audio.Index)}
+                  </span>
                 </button>
               ))}
             </div>
@@ -334,7 +336,7 @@ export const TrackMenus: React.FC<TrackMenusProps> = ({
           <Captions className="w-5 h-5" />
         </button>
         {openMenu === 'subtitles' && (
-          <div className="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 bottom-28 sm:bottom-12 z-40 sm:w-72 max-h-[56vh] overflow-y-auto overscroll-contain rounded-xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 p-2.5 shadow-2xl space-y-1.5">
+          <div className="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 bottom-28 sm:bottom-24 z-40 sm:w-96 max-h-[48vh] overflow-y-auto overscroll-contain rounded-xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 p-2.5 shadow-2xl space-y-1.5">
             <p className="px-2 py-1 text-xs font-bold uppercase tracking-wider text-zinc-400">
               {t.player.subtitlesHeading}
             </p>
@@ -362,7 +364,7 @@ export const TrackMenus: React.FC<TrackMenusProps> = ({
                         : 'text-zinc-200 hover:bg-white/10'
                     }`}
                   >
-                    <span className="truncate">{track.label}</span>
+                    <span className="line-clamp-2 leading-snug">{track.label}</span>
                     {track.delivery === 'encode' && (
                       <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-zinc-300">
                         {t.player.subtitleBurnInBadge}
@@ -488,7 +490,7 @@ export const TrackMenus: React.FC<TrackMenusProps> = ({
           <Users className="w-5 h-5" />
         </button>
         {openMenu === 'syncplay' && (
-          <div className="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 bottom-28 sm:bottom-12 z-40 sm:w-72 max-h-[55vh] overflow-y-auto overscroll-contain rounded-xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 p-3 shadow-2xl space-y-2.5">
+          <div className="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 bottom-28 sm:bottom-24 z-40 sm:w-72 max-h-[48vh] overflow-y-auto overscroll-contain rounded-xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 p-3 shadow-2xl space-y-2.5">
             <p className="text-xs font-bold uppercase tracking-wider text-zinc-400">
               {t.player.syncPlayHeading}
             </p>
@@ -645,7 +647,7 @@ export const TrackMenus: React.FC<TrackMenusProps> = ({
           <Cast className="w-5 h-5" />
         </button>
         {openMenu === 'cast' && (
-          <div className="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 bottom-28 sm:bottom-12 z-40 sm:w-72 max-h-[55vh] overflow-y-auto overscroll-contain rounded-xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 p-2.5 shadow-2xl space-y-2">
+          <div className="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 bottom-28 sm:bottom-24 z-40 sm:w-72 max-h-[48vh] overflow-y-auto overscroll-contain rounded-xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 p-2.5 shadow-2xl space-y-2">
             <p className="px-1 text-xs font-bold uppercase tracking-wider text-zinc-400">
               {t.player.castHeading}
             </p>
@@ -766,7 +768,7 @@ export const TrackMenus: React.FC<TrackMenusProps> = ({
           <Settings className="w-5 h-5" />
         </button>
         {openMenu === 'quality' && (
-          <div className="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 bottom-28 sm:bottom-12 z-40 sm:w-72 max-h-[55vh] overflow-y-auto overscroll-contain rounded-xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 p-2 shadow-2xl space-y-1">
+          <div className="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 bottom-28 sm:bottom-24 z-40 sm:w-72 max-h-[48vh] overflow-y-auto overscroll-contain rounded-xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 p-2 shadow-2xl space-y-1">
             <div className="px-2.5 py-1 flex items-center justify-between gap-2">
               <p className="text-xs font-bold uppercase tracking-wider text-zinc-400 whitespace-nowrap">
                 {t.player.qualityHeading}
@@ -815,7 +817,7 @@ export const TrackMenus: React.FC<TrackMenusProps> = ({
           {playbackRate}x
         </button>
         {openMenu === 'speed' && (
-          <div className="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 bottom-28 sm:bottom-12 z-40 sm:w-32 max-h-[52vh] overflow-y-auto overscroll-contain rounded-xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 p-1.5 shadow-2xl space-y-1">
+          <div className="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 bottom-28 sm:bottom-24 z-40 sm:w-32 max-h-[48vh] overflow-y-auto overscroll-contain rounded-xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 p-1.5 shadow-2xl space-y-1">
             {[0.75, 1, 1.25, 1.5, 2].map((rate) => (
               <button
                 key={rate}

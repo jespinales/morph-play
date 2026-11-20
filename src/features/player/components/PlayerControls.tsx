@@ -34,6 +34,7 @@ import { PlayerMenuKind, TrackMenus } from './TrackMenus';
 interface PlayerControlsProps {
   showControls: boolean;
   loadingStream: boolean;
+  isBuffering: boolean;
   streamError: string | null;
   hasEnded: boolean;
   titleDisplay: string;
@@ -123,6 +124,7 @@ interface PlayerControlsProps {
 export const PlayerControls: React.FC<PlayerControlsProps> = ({
   showControls,
   loadingStream,
+  isBuffering,
   streamError,
   hasEnded,
   titleDisplay,
@@ -244,7 +246,9 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
       {/* Center touch quick controls */}
       <div
         className={`absolute inset-x-0 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center gap-8 sm:gap-14 pointer-events-none transition-opacity duration-300 ${
-          showControls && !loadingStream && !streamError && !hasEnded ? 'opacity-100' : 'opacity-0'
+          showControls && !loadingStream && !isBuffering && !streamError && !hasEnded && !openMenu
+            ? 'opacity-100'
+            : 'opacity-0'
         }`}
       >
         <button
@@ -253,7 +257,10 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
           aria-label={t.player.rewind10Aria}
           className="pointer-events-auto p-3.5 rounded-full bg-black/45 hover:bg-black/75 text-white/90 backdrop-blur-sm transition-transform active:scale-90 sm:hidden [@media(hover:none)]:inline-flex"
         >
-          <RotateCcw className="w-7 h-7" />
+          <span className="relative inline-flex items-center justify-center">
+            <RotateCcw className="w-7 h-7" />
+            <span className="absolute text-[9px] font-bold leading-none mt-[2px]">10</span>
+          </span>
         </button>
 
         <button
@@ -275,7 +282,10 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
           aria-label={t.player.forward10Aria}
           className="pointer-events-auto p-3.5 rounded-full bg-black/45 hover:bg-black/75 text-white/90 backdrop-blur-sm transition-transform active:scale-90 sm:hidden [@media(hover:none)]:inline-flex"
         >
-          <RotateCw className="w-7 h-7" />
+          <span className="relative inline-flex items-center justify-center">
+            <RotateCw className="w-7 h-7" />
+            <span className="absolute text-[9px] font-bold leading-none mt-[2px]">10</span>
+          </span>
         </button>
       </div>
 
@@ -413,7 +423,10 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
               aria-label={t.player.rewind10Aria}
               className="hidden sm:inline-flex p-2 rounded-lg text-zinc-200 hover:text-white hover:bg-white/10 transition-all active:scale-90"
             >
-              <RotateCcw className="w-5 h-5" />
+              <span className="relative inline-flex items-center justify-center">
+                <RotateCcw className="w-5 h-5" />
+                <span className="absolute text-[7px] font-bold leading-none mt-[1px]">10</span>
+              </span>
             </button>
 
             <button
@@ -423,7 +436,10 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
               aria-label={t.player.forward10Aria}
               className="hidden sm:inline-flex p-2 rounded-lg text-zinc-200 hover:text-white hover:bg-white/10 transition-all active:scale-90"
             >
-              <RotateCw className="w-5 h-5" />
+              <span className="relative inline-flex items-center justify-center">
+                <RotateCw className="w-5 h-5" />
+                <span className="absolute text-[7px] font-bold leading-none mt-[1px]">10</span>
+              </span>
             </button>
 
             {/* Volume controls */}

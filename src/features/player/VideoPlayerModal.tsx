@@ -1674,14 +1674,14 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
       {!isAssActive && subtitleLines.length > 0 && selectedSubtitleIndex !== -1 && (
         <div
           className={`pointer-events-none absolute inset-x-0 z-20 flex flex-col items-center gap-1 px-4 sm:px-10 transition-all duration-200 ${
-            showControls ? 'bottom-24 sm:bottom-28' : 'bottom-10 sm:bottom-14'
+            showControls ? 'bottom-28 sm:bottom-[11.5%]' : 'bottom-[5.5%]'
           }`}
         >
-          <div className="max-w-4xl rounded-lg bg-black/75 px-3.5 py-1 text-center shadow-lg">
+          <div className="max-w-4xl bg-transparent px-3.5 py-1 text-center">
             {subtitleLines.map((line, idx) => (
               <p
                 key={`${idx}-${line}`}
-                className="text-base sm:text-xl md:text-2xl lg:text-[28px] font-semibold leading-snug text-white [text-shadow:0_2px_6px_rgba(0,0,0,0.95)]"
+                className="text-base sm:text-xl md:text-2xl lg:text-[28px] font-semibold leading-snug text-white [text-shadow:0_2px_4px_rgba(0,0,0,0.95),0_0_2px_rgba(0,0,0,0.95),1px_1px_0_rgba(0,0,0,0.9),-1px_-1px_0_rgba(0,0,0,0.9),1px_-1px_0_rgba(0,0,0,0.9),-1px_1px_0_rgba(0,0,0,0.9)]"
               >
                 {line}
               </p>
@@ -1806,6 +1806,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         <PlayerControls
           showControls={showControls}
           loadingStream={loadingStream}
+          isBuffering={isBuffering}
           streamError={streamError}
           hasEnded={hasEnded}
           titleDisplay={titleDisplay}
