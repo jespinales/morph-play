@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   Bookmark,
@@ -100,19 +101,26 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSearchResult }) => {
     };
   }, [searchOpen, searchQuery, serverUrl, accessToken, user?.Id]);
 
+  const openSearchAndFocus = useCallback(() => {
+    // Flush DOM mount synchronously inside the user gesture so iOS WebKit opens the virtual keyboard on first tap
+    flushSync(() => {
+      setSearchOpen(true);
+    });
+    searchInputRef.current?.focus();
+  }, []);
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.key === '/' || (e.ctrlKey && e.key.toLowerCase() === 'k')) && !searchOpen) {
         const tag = (e.target as HTMLElement)?.tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA') return;
         e.preventDefault();
-        setSearchOpen(true);
-        setTimeout(() => searchInputRef.current?.focus(), 40);
+        openSearchAndFocus();
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [searchOpen]);
+  }, [searchOpen, openSearchAndFocus]);
 
   useEffect(() => {
     if (location.pathname === '/search') {
@@ -204,7 +212,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSearchResult }) => {
                       onChange={(e) => handleSearchChange(e.target.value)}
                       placeholder={t.nav.searchPlaceholder}
                       aria-label={t.nav.searchAria}
-                      className="bg-transparent text-sm text-white placeholder-zinc-400 focus:outline-none w-full min-w-0 py-1.5"
+                      className="bg-transparent text-base lg:text-sm text-white placeholder-zinc-400 focus:outline-none w-full min-w-0 py-1.5"
                     />
                     <button
                       type="button"
@@ -285,10 +293,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSearchResult }) => {
               ) : (
                 <button
                   type="button"
-                  onClick={() => {
-                    setSearchOpen(true);
-                    setTimeout(() => searchInputRef.current?.focus(), 40);
-                  }}
+                  onClick={openSearchAndFocus}
                   aria-label={t.nav.openSearchAria}
                   title={t.nav.searchTitle}
                   className="w-10 h-10 rounded-full flex items-center justify-center text-zinc-200 hover:text-white hover:bg-white/10 transition-colors"
