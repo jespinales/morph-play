@@ -189,7 +189,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSearchResult }) => {
             {/* Expandable search bar (full-width overlay below lg to avoid overflow on mobile/tablet) */}
             <div ref={searchBoxRef} className="relative flex items-center">
               {searchOpen ? (
-                <div className="fixed top-0 inset-x-0 z-50 h-16 md:h-[72px] bg-[#0a0a0e]/98 backdrop-blur-xl border-b border-white/10 px-4 sm:px-6 flex items-center lg:static lg:inset-auto lg:h-auto lg:bg-transparent lg:backdrop-blur-none lg:border-0 lg:p-0">
+                <div className="fixed top-0 inset-x-0 z-50 h-16 md:h-[72px] bg-[#0a0a0e]/95 backdrop-blur-xl border-b border-white/10 px-4 sm:px-6 flex items-center lg:static lg:inset-auto lg:h-auto lg:bg-transparent lg:backdrop-blur-none lg:border-0 lg:p-0">
                   <div className="relative flex items-center w-full lg:w-64 xl:w-72 bg-[#141620]/95 border border-white/20 rounded-full pl-3.5 pr-1 py-0.5 transition-all">
                     <Search className="w-4 h-4 text-zinc-400 shrink-0 mr-2" />
                     <input
@@ -222,7 +222,11 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSearchResult }) => {
                     </button>
 
                     {hintsOpen && searchHints.length > 0 && (
-                      <div className="absolute left-0 right-0 top-full mt-2 rounded-2xl bg-[#141620]/98 backdrop-blur-xl border border-white/15 shadow-2xl py-1.5 max-h-[60vh] overflow-y-auto z-50">
+                      <div
+                        className={`absolute left-0 right-0 top-full mt-2 rounded-2xl bg-[#141620]/95 backdrop-blur-xl border border-white/15 shadow-2xl py-1.5 max-h-[60vh] overflow-y-auto z-50 ${
+                          location.pathname === '/search' ? 'hidden lg:block' : ''
+                        }`}
+                      >
                         {searchHints.map((hint) => {
                           const targetId = hint.Id || hint.ItemId || '';
                           const thumb = getItemImageUrl(

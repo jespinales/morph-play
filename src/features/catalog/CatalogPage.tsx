@@ -45,10 +45,9 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
   const { serverUrl, accessToken, user } = useAuth();
   const { locale, t } = usePreferences();
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const urlQuery = searchParams.get('q') ?? '';
 
-  const [localSearch, setLocalSearch] = useState(urlQuery);
   const [sortBy, setSortBy] = useState('DateCreated');
   const [selectedGenre, setSelectedGenre] = useState('');
   const [selectedTag, setSelectedTag] = useState('');
@@ -71,10 +70,6 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
   );
 
   const sortCfg = sortOptions.find((s) => s.value === sortBy) ?? sortOptions[0];
-
-  useEffect(() => {
-    setLocalSearch(urlQuery);
-  }, [urlQuery]);
 
   useEffect(() => {
     setSelectedGenre('');
@@ -134,7 +129,7 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
     selectedTag,
     selectedYear,
     selectedLibraryId,
-    searchTerm: localSearch,
+    searchTerm: urlQuery,
     locale,
     serverUrl,
     accessToken,
@@ -177,7 +172,7 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
       empty: t.catalog.emptyFavorites,
     },
     search: {
-      title: localSearch.trim() ? t.catalog.searchResultsFor(localSearch.trim()) : t.catalog.searchTitle,
+      title: urlQuery.trim() ? t.catalog.searchResultsFor(urlQuery.trim()) : t.catalog.searchTitle,
       icon: Search,
       empty: t.catalog.emptySearch,
     },
@@ -304,26 +299,6 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
               </button>
             </form>
           )}
-          {mode === 'search' && (
-            <div className="relative w-full sm:w-64 lg:hidden">
-              <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <input
-                id="catalog-search-input"
-                name="q"
-                type="text"
-                value={localSearch}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setLocalSearch(val);
-                  setSearchParams(val ? { q: val } : {}, { replace: true });
-                }}
-                placeholder={t.catalog.searchInputPlaceholder}
-                aria-label={t.catalog.searchInputAria}
-                className="w-full pl-9 pr-3 py-2 min-h-[38px] rounded-xl bg-[#12131a] border border-white/15 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#00A4DC]"
-              />
-            </div>
-          )}
-
           {(availableLibraries.length > 1 || (mode === 'search' && availableLibraries.length > 0)) && (
             <FilterSelect
               id="catalog-library-filter"
