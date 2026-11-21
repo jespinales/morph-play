@@ -91,13 +91,14 @@ export function getUserAvatarUrl(serverUrl: string, user: UserDto): string | nul
 export function getPersonImageUrl(
   serverUrl: string,
   personId: string,
-  primaryImageTag?: string
+  primaryImageTag?: string,
+  maxWidth = 240
 ): string | null {
   if (isDemoServer(serverUrl)) {
     return getDemoImageUrl(personId, 'User', personId);
   }
   if (!primaryImageTag) return null;
-  return `${normalizeServerUrl(serverUrl)}/Items/${personId}/Images/Primary?maxWidth=240&quality=85&tag=${primaryImageTag}`;
+  return `${normalizeServerUrl(serverUrl)}/Items/${personId}/Images/Primary?maxWidth=${maxWidth}&quality=85&tag=${primaryImageTag}`;
 }
 
 export function getChapterImageUrl(

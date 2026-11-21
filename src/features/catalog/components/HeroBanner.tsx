@@ -165,11 +165,11 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
           )}
 
           {/* Action buttons */}
-          <div className="flex flex-wrap items-center gap-3 pt-1">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 pt-1">
             <button
               type="button"
               onClick={() => onPlay(current)}
-              className="inline-flex items-center gap-2.5 px-6 sm:px-7 py-2.5 sm:py-3 rounded-lg bg-white text-black font-bold text-sm sm:text-base hover:bg-white/90 active:scale-[0.98] transition-all shadow-lg"
+              className="inline-flex items-center gap-2 sm:gap-2.5 px-5 sm:px-7 py-2.5 sm:py-3 rounded-lg bg-white text-black font-bold text-sm sm:text-base hover:bg-white/90 active:scale-[0.98] transition-all shadow-lg"
             >
               <Play className="w-5 h-5 fill-black" />
               {hasResume ? t.common.resume : t.common.play}
@@ -178,10 +178,12 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
             <button
               type="button"
               onClick={() => onOpenDetail(current)}
-              className="inline-flex items-center gap-2 px-5 sm:px-6 py-2.5 sm:py-3 rounded-lg bg-white/15 backdrop-blur-md text-white font-semibold text-sm sm:text-base hover:bg-white/25 active:scale-[0.98] transition-all border border-white/10"
+              title={t.hero.moreInfo}
+              aria-label={t.hero.moreInfo}
+              className="inline-flex items-center justify-center gap-2 p-3 sm:px-6 sm:py-3 rounded-full sm:rounded-lg bg-white/15 backdrop-blur-md text-white font-semibold text-sm sm:text-base hover:bg-white/25 active:scale-[0.98] transition-all border border-white/15 sm:border-white/10"
             >
-              <Info className="w-5 h-5" />
-              {t.hero.moreInfo}
+              <Info className="w-5 h-5 shrink-0" />
+              <span className="hidden sm:inline">{t.hero.moreInfo}</span>
             </button>
 
             <button

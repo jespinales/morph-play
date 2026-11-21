@@ -256,9 +256,10 @@ export const DetailModal: React.FC<DetailModalProps> = ({
   };
 
   const isPerson = detail.Type === 'Person';
-  const backdropUrl = isPerson
-    ? getPersonImageUrl(serverUrl, detail.Id, detail.ImageTags?.Primary)
-    : getItemImageUrl(serverUrl, detail, 'Backdrop', 1600);
+  const personPortraitUrl = isPerson
+    ? getPersonImageUrl(serverUrl, detail.Id, detail.ImageTags?.Primary, 600)
+    : null;
+  const backdropUrl = !isPerson ? getItemImageUrl(serverUrl, detail, 'Backdrop', 1600) : null;
   const logoUrl = !isPerson && !logoFailed ? getItemImageUrl(serverUrl, detail, 'Logo', 600) : null;
   const localTrailer = trailers[0];
   const remoteTrailerUrl = detail.RemoteTrailers?.find((rt) =>
@@ -301,41 +302,73 @@ export const DetailModal: React.FC<DetailModalProps> = ({
           <X className="w-5 h-5" />
         </button>
 
-        {/* 16:9 panoramic header */}
-        <div className="relative aspect-video max-h-[480px] w-full overflow-hidden bg-[#0a0a0e]">
-          {backdropUrl ? (
-            <img
-              src={backdropUrl}
-              alt={detail.Name}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full bg-gradient-to-br from-[#2d1a3e] via-[#142033] to-[#12131a]" />
-          )}
-
-          <div className="absolute inset-0 bg-gradient-to-t from-[#12131a] via-[#12131a]/40 to-black/25" />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#12131a]/85 via-transparent to-transparent" />
-
-          <div className="absolute bottom-5 left-5 right-5 sm:bottom-8 sm:left-8 sm:right-8 flex flex-col gap-4">
-            {logoUrl ? (
+        {/* Person portrait header or 16:9 media panoramic header */}
+        {isPerson ? (
+          <div className="relative w-full overflow-hidden bg-[#0a0a0e] px-5 pt-12 pb-6 sm:px-8 sm:pt-10 sm:pb-8 border-b border-white/10">
+            {personPortraitUrl && (
               <img
-                src={logoUrl}
+                src={personPortraitUrl}
+                alt=""
+                aria-hidden="true"
+                className="absolute inset-0 w-full h-full object-cover object-top scale-110 blur-2xl opacity-30 pointer-events-none"
+              />
+            )}
+            <div className="absolute inset-0 bg-gradient-to-t from-[#12131a] via-[#12131a]/70 to-black/40" />
+
+            <div className="relative z-10 flex items-center gap-4 sm:gap-7">
+              <div className="w-24 sm:w-36 aspect-[2/3] rounded-2xl overflow-hidden shrink-0 border border-white/15 bg-white/5 shadow-2xl flex items-center justify-center">
+                {personPortraitUrl ? (
+                  <img
+                    src={personPortraitUrl}
+                    alt={detail.Name}
+                    className="w-full h-full object-cover object-top"
+                  />
+                ) : (
+                  <UserIcon className="w-10 h-10 sm:w-12 sm:h-12 text-zinc-500" />
+                )}
+              </div>
+
+              <div className="min-w-0 flex-1 pr-10 sm:pr-12">
+                <h2 className="text-2xl sm:text-4xl font-black text-white drop-shadow-lg leading-tight break-words">
+                  {detail.Name}
+                </h2>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="relative aspect-video max-h-[480px] w-full overflow-hidden bg-[#0a0a0e]">
+            {backdropUrl ? (
+              <img
+                src={backdropUrl}
                 alt={detail.Name}
-                onError={() => setLogoFailed(true)}
-                className="max-h-20 sm:max-h-28 max-w-[75%] object-contain object-left drop-shadow-xl"
+                className="w-full h-full object-cover"
               />
             ) : (
-              <h2 className="text-2xl sm:text-4xl font-black text-white drop-shadow-lg leading-tight">
-                {detail.Name}
-              </h2>
+              <div className="w-full h-full bg-gradient-to-br from-[#2d1a3e] via-[#142033] to-[#12131a]" />
             )}
 
-            {!isPerson && (
-              <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+            <div className="absolute inset-0 bg-gradient-to-t from-[#12131a] via-[#12131a]/40 to-black/25" />
+            <div className="absolute inset-0 bg-gradient-to-r from-[#12131a]/85 via-transparent to-transparent" />
+
+            <div className="absolute bottom-5 left-5 right-5 sm:bottom-8 sm:left-8 sm:right-8 flex flex-col gap-4">
+              {logoUrl ? (
+                <img
+                  src={logoUrl}
+                  alt={detail.Name}
+                  onError={() => setLogoFailed(true)}
+                  className="max-h-20 sm:max-h-28 max-w-[75%] object-contain object-left drop-shadow-xl"
+                />
+              ) : (
+                <h2 className="text-2xl sm:text-4xl font-black text-white drop-shadow-lg leading-tight">
+                  {detail.Name}
+                </h2>
+              )}
+
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <button
                   type="button"
                   onClick={handlePrimaryPlay}
-                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg bg-white text-black font-bold text-sm sm:text-base hover:bg-white/90 active:scale-[0.98] transition-all shadow-lg"
+                  className="inline-flex items-center gap-2 px-5 sm:px-6 py-2.5 rounded-lg bg-white text-black font-bold text-sm sm:text-base hover:bg-white/90 active:scale-[0.98] transition-all shadow-lg"
                 >
                   <Play className="w-5 h-5 fill-black" />
                   {hasResume ? t.common.resume : t.common.play}
@@ -345,20 +378,24 @@ export const DetailModal: React.FC<DetailModalProps> = ({
                   <button
                     type="button"
                     onClick={() => onPlay(localTrailer)}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-white/25 bg-white/10 hover:bg-white/20 text-white text-sm font-semibold transition-all"
+                    title={t.detail.watchTrailer}
+                    aria-label={t.detail.watchTrailer}
+                    className="inline-flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg border border-white/25 bg-white/10 hover:bg-white/20 text-white text-sm font-semibold transition-all"
                   >
-                    <Clapperboard className="w-4 h-4" />
-                    <span>{t.detail.watchTrailer}</span>
+                    <Clapperboard className="w-4 h-4 shrink-0" />
+                    <span className="hidden sm:inline">{t.detail.watchTrailer}</span>
                   </button>
                 ) : remoteTrailerUrl ? (
                   <a
                     href={remoteTrailerUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-white/25 bg-white/10 hover:bg-white/20 text-white text-sm font-semibold transition-all"
+                    title={t.detail.watchTrailer}
+                    aria-label={t.detail.watchTrailer}
+                    className="inline-flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg border border-white/25 bg-white/10 hover:bg-white/20 text-white text-sm font-semibold transition-all"
                   >
-                    <Clapperboard className="w-4 h-4" />
-                    <span>{t.detail.watchTrailer}</span>
+                    <Clapperboard className="w-4 h-4 shrink-0" />
+                    <span className="hidden sm:inline">{t.detail.watchTrailer}</span>
                   </a>
                 ) : null}
 
@@ -368,14 +405,15 @@ export const DetailModal: React.FC<DetailModalProps> = ({
                       type="button"
                       onClick={handleToggleFavorite}
                       title={isFavorite ? t.detail.removeFromList : t.detail.addToList}
-                      className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border text-sm font-semibold transition-all ${
+                      aria-label={isFavorite ? t.detail.removeFromList : t.detail.addToList}
+                      className={`inline-flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg border text-sm font-semibold transition-all ${
                         isFavorite
                           ? 'bg-[#00A4DC]/20 border-[#00A4DC] text-[#7dd3fc]'
                           : 'bg-white/10 border-white/25 text-white hover:bg-white/20'
                       }`}
                     >
-                      {isFavorite ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                      <span>{isFavorite ? t.detail.inMyList : t.detail.myList}</span>
+                      {isFavorite ? <Check className="w-4 h-4 shrink-0" /> : <Plus className="w-4 h-4 shrink-0" />}
+                      <span className="hidden sm:inline">{isFavorite ? t.detail.inMyList : t.detail.myList}</span>
                     </button>
 
                     <button
@@ -563,9 +601,9 @@ export const DetailModal: React.FC<DetailModalProps> = ({
                   </span>
                 )}
               </div>
-            )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Metadata, episodes, cast, and similar titles body */}
         <div className="p-5 sm:p-8 space-y-8 min-h-[420px]">
