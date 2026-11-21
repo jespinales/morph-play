@@ -27,6 +27,7 @@ import {
   SyncPlayCommandData,
   SyncPlayGroupDto,
 } from '../../shared/types/jellyfin';
+import { isIosBrowser } from '../../shared/utils/platform';
 import { resolveResumeStartSeconds, secondsToTicks, ticksToSeconds } from '../../shared/utils/time';
 import { getTrickplayFrame, selectTrickplayInfo, TrickplaySelection } from '../../shared/utils/trickplay';
 import { NextEpisodeCard } from './components/NextEpisodeCard';
@@ -137,8 +138,10 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   const [selectedQuality, setSelectedQuality] = useState<StreamingQuality>(preferences.quality);
   const selectedQualityRef = useRef<StreamingQuality>(selectedQuality);
   selectedQualityRef.current = selectedQuality;
+  const isIos = useMemo(() => isIosBrowser(), []);
   const [isPiP, setIsPiP] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [isMediaReady, setIsMediaReady] = useState<boolean>(false);
   const supportsPiP =
     typeof document !== 'undefined' &&
     'pictureInPictureEnabled' in document &&
@@ -245,6 +248,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
 
     async function loadPlayback() {
       setLoadingStream(true);
+      setIsMediaReady(false);
       setBuiltStream(null);
       setMediaSources([]);
       setMediaSource(null);
@@ -453,6 +457,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     lastTimeUpdateRef.current = -1;
     ignoreNextSeekSyncRef.current = false;
     setActivePlayMethodOverride(null);
+    setIsMediaReady(video.readyState >= 2);
     setIsBuffering(true);
 
     if (hlsRef.current) {
@@ -802,38 +807,96 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   }, [supportsPiP]);
 
   const toggleFullscreen = useCallback(() => {
+    const doc = document as Document & {
+      webkitFullscreenElement?: Element | null;
+      webkitExitFullscreen?: () => Promise<void> | void;
+    };
     const el = containerRef.current;
     const video = videoRef.current as
-      | (HTMLVideoElement & { webkitEnterFullscreen?: () => void })
+      | (HTMLVideoElement & {
+          webkitEnterFullscreen?: () => void;
+          webkitExitFullscreen?: () => void;
+          webkitDisplayingFullscreen?: boolean;
+        })
       | null;
 
-    if (document.fullscreenElement) {
-      document.exitFullscreen().catch(() => {});
+    const enterNativeVideoFullscreen = () => {
+      try {
+        video?.webkitEnterFullscreen?.();
+      } catch {
+        // iOS throws InvalidStateError if native fullscreen is called before metadata is ready
+      }
+    };
+
+    const activeFsElement = document.fullscreenElement ?? doc.webkitFullscreenElement ?? null;
+    if (activeFsElement) {
+      if (typeof document.exitFullscreen === 'function') {
+        document.exitFullscreen().catch(() => {
+          try {
+            doc.webkitExitFullscreen?.();
+          } catch {
+            // Ignore WebKit exit fallback errors
+          }
+        });
+      } else {
+        try {
+          doc.webkitExitFullscreen?.();
+        } catch {
+          // Ignore WebKit exit fallback errors
+        }
+      }
       return;
     }
+
+    if (video?.webkitDisplayingFullscreen) {
+      try {
+        video.webkitExitFullscreen?.();
+      } catch {
+        // Ignore native video fullscreen exit errors
+      }
+      return;
+    }
+
+    // iOS WebKit (Safari & Chrome WKWebView) stalls uninitialized <video> playback when entering fullscreen mid-load
+    if (isIos && (loadingStream || !video || video.readyState < 2)) {
+      return;
+    }
+
     if (el && typeof el.requestFullscreen === 'function') {
       el.requestFullscreen().catch(() => {
-        video?.webkitEnterFullscreen?.();
+        enterNativeVideoFullscreen();
       });
       return;
     }
-    video?.webkitEnterFullscreen?.();
-  }, []);
+    enterNativeVideoFullscreen();
+  }, [isIos, loadingStream]);
 
   useEffect(() => {
-    const video = videoRef.current;
-    const onFsChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    const doc = document as Document & { webkitFullscreenElement?: Element | null };
+    const video = videoRef.current as
+      | (HTMLVideoElement & { webkitDisplayingFullscreen?: boolean })
+      | null;
+    const onFsChange = () =>
+      setIsFullscreen(
+        Boolean(
+          document.fullscreenElement ??
+            doc.webkitFullscreenElement ??
+            video?.webkitDisplayingFullscreen
+        )
+      );
     const onWebkitBegin = () => setIsFullscreen(true);
     const onWebkitEnd = () => setIsFullscreen(false);
     const onEnterPiP = () => setIsPiP(true);
     const onLeavePiP = () => setIsPiP(false);
     document.addEventListener('fullscreenchange', onFsChange);
+    document.addEventListener('webkitfullscreenchange', onFsChange);
     video?.addEventListener('webkitbeginfullscreen', onWebkitBegin);
     video?.addEventListener('webkitendfullscreen', onWebkitEnd);
     video?.addEventListener('enterpictureinpicture', onEnterPiP);
     video?.addEventListener('leavepictureinpicture', onLeavePiP);
     return () => {
       document.removeEventListener('fullscreenchange', onFsChange);
+      document.removeEventListener('webkitfullscreenchange', onFsChange);
       video?.removeEventListener('webkitbeginfullscreen', onWebkitBegin);
       video?.removeEventListener('webkitendfullscreen', onWebkitEnd);
       video?.removeEventListener('enterpictureinpicture', onEnterPiP);
@@ -1599,6 +1662,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         }}
         onPlaying={() => {
           setIsPlaying(true);
+          setIsMediaReady(true);
           clearBuffering();
         }}
         onPause={(e) => {
@@ -1615,7 +1679,10 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           if (!e.currentTarget.paused) scheduleBuffering();
         }}
         onLoadedData={(e) => {
-          if (!e.currentTarget.paused && e.currentTarget.readyState >= 2) clearBuffering();
+          if (e.currentTarget.readyState >= 2) {
+            setIsMediaReady(true);
+            if (!e.currentTarget.paused) clearBuffering();
+          }
         }}
         onSeeking={scheduleBuffering}
         onSeeked={() => {
@@ -1642,8 +1709,14 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
             }
           }, 350);
         }}
-        onCanPlay={clearBuffering}
-        onCanPlayThrough={clearBuffering}
+        onCanPlay={() => {
+          setIsMediaReady(true);
+          clearBuffering();
+        }}
+        onCanPlayThrough={() => {
+          setIsMediaReady(true);
+          clearBuffering();
+        }}
         onLoadedMetadata={(e) => {
           const vid = e.currentTarget;
           if (Number.isFinite(vid.duration) && vid.duration > 0) setDuration(vid.duration);
@@ -1691,8 +1764,8 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           setNextCountdown(nextEpisode && preferences.autoPlayNextEpisode ? 5 : null);
         }}
         className="w-full h-full object-contain"
-        // Keeping opacity < 1 avoids buggy Windows DWM MPO hardware overlay promotion when controls hide
-        style={{ opacity: 0.995 }}
+        // Keeping opacity < 1 avoids buggy Windows DWM MPO hardware overlay promotion; omit on iOS WebKit fullscreen
+        style={isIos ? undefined : { opacity: 0.995 }}
       >
         {builtStream?.subtitleTracks
           .filter((track) => !isAssActive && track.index === selectedSubtitleIndex)
@@ -1859,6 +1932,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           supportsPiP={supportsPiP}
           isPiP={isPiP}
           isFullscreen={isFullscreen}
+          fullscreenDisabled={isIos && (loadingStream || !isMediaReady)}
           playbackRate={playbackRate}
           openMenu={openMenu}
           serverUrl={serverUrl}

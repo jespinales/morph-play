@@ -50,6 +50,7 @@ interface PlayerControlsProps {
   supportsPiP: boolean;
   isPiP: boolean;
   isFullscreen: boolean;
+  fullscreenDisabled?: boolean;
   playbackRate: number;
   openMenu: PlayerMenuKind;
   serverUrl: string;
@@ -140,6 +141,7 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
   supportsPiP,
   isPiP,
   isFullscreen,
+  fullscreenDisabled = false,
   playbackRate,
   openMenu,
   serverUrl,
@@ -560,9 +562,15 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
             <button
               type="button"
               onClick={onToggleFullscreen}
+              disabled={fullscreenDisabled}
               title={t.player.fullscreenTitle}
               aria-label={t.player.fullscreenAria}
-              className="p-2 sm:p-2.5 rounded-lg text-zinc-200 hover:text-white hover:bg-white/10 transition-colors"
+              aria-disabled={fullscreenDisabled || undefined}
+              className={`p-2 sm:p-2.5 rounded-lg transition-colors ${
+                fullscreenDisabled
+                  ? 'text-zinc-500 opacity-40 cursor-not-allowed'
+                  : 'text-zinc-200 hover:text-white hover:bg-white/10'
+              }`}
             >
               {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
             </button>

@@ -10,6 +10,7 @@ import {
 import { parseCueLines } from '../subtitles';
 import { getTrickplayFrame, selectTrickplayInfo } from '../trickplay';
 import { parseServerBrandFromCss, upsertServerBrandInCss } from '../brand';
+import { isIosBrowser } from '../platform';
 
 describe('url utils', () => {
   it('normalizes server URLs and preserves demo protocol', () => {
@@ -104,5 +105,38 @@ describe('brand CSS metadata utils', () => {
     const cleared = upsertServerBrandInCss(updated, null);
     expect(cleared).toBe('.header { color: red; }');
     expect(parseServerBrandFromCss(cleared)).toBeNull();
+  });
+});
+
+describe('platform utils', () => {
+  it('detects iOS Chrome, Safari, and iPadOS touch browsers while excluding Android and desktop', () => {
+    expect(
+      isIosBrowser(
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 18_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/131.0.0.0 Mobile/15E148 Safari/604.1',
+        5,
+        'iPhone'
+      )
+    ).toBe(true);
+    expect(
+      isIosBrowser(
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15',
+        5,
+        'MacIntel'
+      )
+    ).toBe(true);
+    expect(
+      isIosBrowser(
+        'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36',
+        5,
+        'Linux armv8l'
+      )
+    ).toBe(false);
+    expect(
+      isIosBrowser(
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        0,
+        'Win32'
+      )
+    ).toBe(false);
   });
 });
